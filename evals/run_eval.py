@@ -18,6 +18,7 @@ import ollama
 
 from ragapp import config
 from ragapp.cleaning import clean
+from ragapp.rerank import load_model
 from ragapp.documents import load_documents
 from ragapp.rag import answer as rag_answer
 from ragapp.student import StudentContext, describe
@@ -204,6 +205,8 @@ def main() -> None:
         DUPLICATE_OF.update(clean(corpus).duplicate_of)
 
     RESULTS_DIR.mkdir(exist_ok=True)
+    if config.RERANK_MODEL:
+        load_model(config.RERANK_MODEL)  # load once before timing, so question 1 isn't charged for it
     results = []
     for number, item in enumerate(items, start=1):
         results.append(evaluate_one(item, student_for(item, args.user_year, page_years)))

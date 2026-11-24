@@ -39,13 +39,15 @@ TOP_K = 5
 FILTER_BY_QUESTION_YEAR = os.getenv("FILTER_BY_QUESTION_YEAR", "1") == "1"
 
 # Rewrite the question before searching (see rewrite.py):
-#   "0" off | "1" v1, LLM writes one query (rejected by the eval) | "2" v2, multi-query + RRF
-# Off by default: on dev, v2 moved every metric by about one question either way (noise level) and adds an LLM call.
-QUERY_REWRITE = os.getenv("QUERY_REWRITE", "0")
+#   "0" off | "1" v1, LLM writes one query (rejected by the eval) | "2" v2, LLM expansion + student week, multi-query + RRF
+#   | "3" student week only: no LLM call, the original question plus a week-tagged copy for time questions
+# "2" by default since the reranking comparison: alone it was noise, with a reranker student hit@5 went 47% -> 73%.
+QUERY_REWRITE = os.getenv("QUERY_REWRITE", "2")
 
 # Rerank (see rerank.py): vector search finds RERANK_CANDIDATES chunks, a cross-encoder re-sorts them.
 # "" = off. Models measured: "Xenova/ms-marco-MiniLM-L-6-v2" (0.08 GB), "BAAI/bge-reranker-base" (1.04 GB).
-RERANK_MODEL = os.getenv("RERANK_MODEL", "")
-RERANK_CANDIDATES = 30
+# bge-reranker-base by default: page hit@1 64% -> 96% on dev. Costs ~6.5 s per question on CPU (30 candidates).
+RERANK_MODEL = os.getenv("RERANK_MODEL", "BAAI/bge-reranker-base")
+RERANK_CANDIDATES = int(os.getenv("RERANK_CANDIDATES", "30"))
 # Downloaded model files (git-ignored). fastembed's default is the temp folder, which Windows cleans up.
 MODEL_CACHE = PROJECT_ROOT / "models"

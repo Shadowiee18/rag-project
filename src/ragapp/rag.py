@@ -11,7 +11,7 @@ from ragapp import config
 from ragapp.generate import generate
 from ragapp.rerank import rerank
 from ragapp.retrieve import retrieve, retrieve_many
-from ragapp.rewrite import rewrite_query, search_queries
+from ragapp.rewrite import rewrite_query, search_queries, week_queries
 from ragapp.student import StudentContext, describe
 
 
@@ -23,8 +23,8 @@ def answer(
     n = max(k, retrieve_k or 0)
     pool = max(n, config.RERANK_CANDIDATES) if config.RERANK_MODEL else n  # reranking needs candidates to sort
     user_year, user_block = (student.year, student.block) if student else (None, None)
-    if config.QUERY_REWRITE == "2":
-        queries = search_queries(question, student)
+    if config.QUERY_REWRITE in ("2", "3"):
+        queries = search_queries(question, student) if config.QUERY_REWRITE == "2" else week_queries(question, student)
         rewritten_at = time.perf_counter()
         chunks = retrieve_many(queries, pool, question, user_year, user_block)
     else:
