@@ -1,0 +1,2 @@
+{"id": "q001", "question": "Write a question a real user would ask about your documents", "expected_answer": "The correct answer, in a sentence or two", "source_ids": ["doc-id-or-filename-that-contains-the-answer"]}
+{"id": "q002", "question": "A question your documents do NOT answer", "expected_answer": "I don't know", "source_ids": []}
