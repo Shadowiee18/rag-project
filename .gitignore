@@ -10,3 +10,12 @@ data/raw/*
 evals/golden_set.jsonl
 evals/drafts/
 evals/results/*.jsonl
+evals/golden_student.jsonl
+
+# Corpus analysis output names course pages
+analysis/output/
+
+# Local assistant files (Claude Code): stay on this PC, never committed
+CLAUDE.md
+HANDOFF.md
+.claude/

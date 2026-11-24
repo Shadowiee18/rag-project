@@ -1,0 +1,20 @@
+# CI: run the test suite on every push and pull request.
+# The tests need no Ollama, no Qdrant and no course data (the LLM is mocked), so they run on a plain GitHub runner.
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"  # same as the local .venv
+          enable-cache: true
+      - run: uv sync --locked      # fails if uv.lock is out of date with pyproject.toml
+      - run: uv run pytest

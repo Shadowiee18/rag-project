@@ -8,6 +8,7 @@ import time
 
 from ragapp import config
 from ragapp.chunking import chunk_text
+from ragapp.cleaning import clean
 from ragapp.documents import load_documents
 from ragapp.embed import embed
 from ragapp.store import add_chunks, get_client, recreate_collection
@@ -26,10 +27,27 @@ def chunk_header(doc_id: str, title: str) -> str:
     return " · ".join(folders + [title or doc_id])
 
 
+def label(value: str) -> str | list[str]:
+    """'BlockA BlockB' (a merged duplicate, see cleaning.py) -> ['BlockA', 'BlockB'].
+    Qdrant's MatchAny filter matches a list field if any of its values matches."""
+    return value.split() if " " in value else value
+
+
+def load_corpus():
+    docs = load_documents(config.CORPUS_PATH)
+    if not config.CLEAN_CORPUS:
+        return docs
+    report = clean(docs)
+    print(f"cleaning: kept {len(report.kept)} of {len(docs)} pages "
+          f"({len(report.dropped_short)} near-empty, {len(report.duplicate_of)} duplicate copies merged, "
+          f"{len(report.templates)} tagged template)")
+    return report.kept
+
+
 def build_chunks() -> list[dict]:
     """Split every document into chunks. Each chunk keeps where it came from."""
     chunks = []
-    for doc in load_documents(config.CORPUS_PATH):
+    for doc in load_corpus():
         title = doc.metadata.get("title", "")
         header = chunk_header(doc.id, title)
         for index, text in enumerate(chunk_text(doc.text, config.CHUNK_SIZE, config.CHUNK_OVERLAP)):
@@ -40,8 +58,9 @@ def build_chunks() -> list[dict]:
                 "title": title,
                 "source": doc.source,
                 "section": doc.metadata.get("section", ""),
-                "year": doc.metadata.get("year", ""),
-                "block": doc.metadata.get("block", ""),
+                "year": label(doc.metadata.get("year", "")),
+                "block": label(doc.metadata.get("block", "")),
+                "page_type": doc.metadata.get("page_type", ""),
                 "chunk_index": index,
                 "text": text,
             })

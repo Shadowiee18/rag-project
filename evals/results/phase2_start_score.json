@@ -1,0 +1,37 @@
+{
+  "run": "phase2_start",
+  "evidence_found@5": 0.745,
+  "all_evidence_found@5": 0.611,
+  "judge_claude": {
+    "graded": 62,
+    "correct": 0.63,
+    "partial": 0.296,
+    "wrong": 0.074,
+    "faithful (all)": 0.839,
+    "citations ok (answered)": 0.611,
+    "unanswerable correctly refused": 0.875
+  },
+  "agreement (correctness, answerable)": [
+    {
+      "pair": "local vs claude",
+      "questions": 54,
+      "same_label": 0.759,
+      "cohens_kappa": 0.576,
+      "disagreements": [
+        "a11: partial vs correct",
+        "a12: partial vs correct",
+        "a15: partial vs wrong",
+        "a16: partial vs wrong",
+        "a20: partial vs correct",
+        "b07: partial vs correct",
+        "b10: partial vs correct",
+        "b16: partial vs correct",
+        "b17: partial vs correct",
+        "b20: partial vs correct",
+        "b21: partial vs correct",
+        "b27: wrong vs partial",
+        "b30: partial vs correct"
+      ]
+    }
+  ]
+}

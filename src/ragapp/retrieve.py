@@ -34,11 +34,49 @@ def year_block_in_question(question: str) -> tuple[str, list[str]]:
     return (f"Year{year}" if year else "", sorted(blocks))
 
 
-def retrieve(question: str, k: int = config.TOP_K, user_year: str | None = None) -> list[dict]:
-    """user_year: the student's own year (e.g. 'Year2'), used when the question names no year."""
+def filter_for(question: str, user_year: str | None, user_block: str | None) -> tuple[str | None, list[str] | None]:
+    """Year/block to filter on: from the question if it names one, else the student's own.
+    A block letter without a year is ambiguous (every year has a Block B), so it needs a year."""
     year, blocks = year_block_in_question(question) if config.FILTER_BY_QUESTION_YEAR else ("", [])
     if not year and user_year:
         year = user_year
-    # A block letter without a year is ambiguous (every year has a Block B), so it needs a year.
+        if not blocks and user_block:
+            blocks = [user_block]
+    return (year or None), (blocks if year else None)
+
+
+def retrieve(
+    question: str, k: int = config.TOP_K, user_year: str | None = None, user_block: str | None = None
+) -> list[dict]:
+    """user_year / user_block: the student's own year and block (e.g. 'Year2', 'BlockB'),
+    used only when the question names no year itself. Pages with no year/block always stay searchable."""
+    year, blocks = filter_for(question, user_year, user_block)
     query_vector = embed([question])[0]
-    return search(get_client(), query_vector, k, year=year or None, blocks=blocks if year else None)
+    return search(get_client(), query_vector, k, year=year, blocks=blocks)
+
+
+RRF_K = 60  # the usual constant: dampens how much rank 1 beats rank 2
+
+
+def rrf_merge(result_lists: list[list[dict]], k: int) -> list[dict]:
+    """Reciprocal rank fusion: each chunk scores sum(1 / (RRF_K + rank)) over the lists it appears in."""
+    scores: dict[tuple, float] = {}
+    chunk_by_key: dict[tuple, dict] = {}
+    for results in result_lists:
+        for rank, chunk in enumerate(results, start=1):
+            key = (chunk["doc_id"], chunk["chunk_index"])
+            scores[key] = scores.get(key, 0.0) + 1.0 / (RRF_K + rank)
+            chunk_by_key.setdefault(key, chunk)
+    ordered = sorted(scores, key=lambda key: -scores[key])[:k]
+    return [{**chunk_by_key[key], "score": round(scores[key], 5)} for key in ordered]
+
+
+def retrieve_many(
+    queries: list[str], k: int, question: str, user_year: str | None = None, user_block: str | None = None
+) -> list[dict]:
+    """Search with several queries and merge with RRF. The filter is decided from the ORIGINAL question,
+    so a rewrite can't change which block is searched."""
+    year, blocks = filter_for(question, user_year, user_block)
+    client = get_client()
+    vectors = embed(queries)  # one batch call for all queries
+    return rrf_merge([search(client, v, 2 * k, year=year, blocks=blocks) for v in vectors], k)

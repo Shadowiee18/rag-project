@@ -11,20 +11,23 @@ import argparse
 import json
 import re
 import statistics
-import time
+from datetime import date
 from pathlib import Path
 
 import ollama
 
 from ragapp import config
+from ragapp.cleaning import clean
 from ragapp.documents import load_documents
-from ragapp.generate import generate
-from ragapp.retrieve import retrieve
+from ragapp.rag import answer as rag_answer
+from ragapp.student import StudentContext, describe
 
 EVALS_DIR = Path(__file__).resolve().parent
 GOLDEN_PATH = EVALS_DIR / "golden_set.jsonl"
 RESULTS_DIR = EVALS_DIR / "results"
 RETRIEVE_K = 10  # retrieve more than we use, so we can see where the right page ranked
+EVAL_TODAY = date(2026, 11, 24)  # fixed, so runs are comparable whenever they happen
+DUPLICATE_OF: dict[str, str] = {}  # filled when CLEAN_CORPUS is on: removed copy -> kept page
 
 JUDGE_PROMPT = """You are grading an answer from a study-assistant chatbot.
 
@@ -73,30 +76,63 @@ def simulated_user_year(item: dict, page_years: dict[str, str]) -> str:
     return next((y for y in years if y), "Year2")
 
 
-def evaluate_one(item: dict, user_year: str | None = None) -> dict:
-    started = time.perf_counter()
-    chunks = retrieve(item["question"], k=RETRIEVE_K, user_year=user_year)
-    retrieved_at = time.perf_counter()
-    answer = generate(item["question"], chunks[: config.TOP_K])
-    finished = time.perf_counter()
+def student_for(item: dict, user_year_mode: str, page_years: dict[str, str]) -> StudentContext | None:
+    """A question's own context (the student set's "today 2026-11-24, Year 2, Block B") wins over simulation."""
+    ctx = item.get("user_context") or {}
+    if ctx.get("year"):
+        return StudentContext(today=date.fromisoformat(ctx["today"]), year=ctx["year"], block=ctx.get("block", ""))
+    if user_year_mode == "simulated":
+        return StudentContext(today=EVAL_TODAY, year=simulated_user_year(item, page_years))
+    return None
+
+
+def evaluate_one(item: dict, student: StudentContext | None = None) -> dict:
+    # The same pipeline as the app, but retrieving 10 chunks so we can see where the right page ranks.
+    out = rag_answer(item["question"], config.TOP_K, student, retrieve_k=RETRIEVE_K)
+    chunks, answer_text = out["chunks"], out["answer"]
 
     doc_ids = [c["doc_id"] for c in chunks]
     answerable = bool(item["source_ids"])
     result = {
         **item,
-        "user_year": user_year,
-        "answer": answer,
+        "student": describe(student) if student else None,
+        "search_query": out["search_query"],
+        "answer": answer_text,
         "retrieved_doc_ids": doc_ids,
-        "refused": is_refusal(answer),
-        "cites": bool(re.search(r"\[\d+\]", answer)),
-        "latency_s": {"retrieve": round(retrieved_at - started, 2), "generate": round(finished - retrieved_at, 2)},
+        # The exact chunks the LLM saw, numbered like in the prompt, for grading faithfulness and citations.
+        "context": [{"number": n, "doc_id": c["doc_id"], "text": c["text"]} for n, c in enumerate(chunks[: config.TOP_K], start=1)],
+        "refused": is_refusal(answer_text),
+        "cites": bool(re.search(r"\[\d+\]", answer_text)),
+        "latency_s": out["timing_s"],
     }
+    if answerable and item.get("evidence"):
+        # Chunk-level check: did the chunks that contain the answer get retrieved?
+        phrases = [e["phrase"] for e in item["evidence"]]
+        top5_text = "\n".join(c["text"] for c in chunks[: config.TOP_K])
+        top10_text = "\n".join(c["text"] for c in chunks)
+        result["evidence_found@5"] = sum(p in top5_text for p in phrases) / len(phrases)
+        result["evidence_found@10"] = sum(p in top10_text for p in phrases) / len(phrases)
     if answerable:
-        result["hit_rank"] = first_hit_rank(doc_ids, item["source_ids"])
+        # In a cleaned index a merged duplicate's surviving copy counts as that page.
+        sources = list(dict.fromkeys(DUPLICATE_OF.get(s, s) for s in item["source_ids"]))
+        result["hit_rank"] = first_hit_rank(doc_ids, sources)
         top_used = set(doc_ids[: config.TOP_K])
-        result["all_sources_in_context"] = all(s in top_used for s in item["source_ids"])
-        result["judge"] = "WRONG" if result["refused"] else judge(item["question"], item["expected_answer"], answer)
+        result["all_sources_in_context"] = all(s in top_used for s in sources)
+        result["judge"] = "WRONG" if result["refused"] else judge(item["question"], item["expected_answer"], answer_text)
     return result
+
+
+def evidence_summary(answerable: list[dict]) -> dict:
+    """Chunk-level retrieval: share of answer phrases present in the chunks the LLM saw (top 5) / top 10."""
+    with_evidence = [r for r in answerable if "evidence_found@5" in r]
+    if not with_evidence:
+        return {}
+    n = len(with_evidence)
+    return {
+        "evidence_found@5": round(sum(r["evidence_found@5"] for r in with_evidence) / n, 3),
+        "all_evidence_found@5": round(sum(r["evidence_found@5"] == 1 for r in with_evidence) / n, 3),
+        "evidence_found@10": round(sum(r["evidence_found@10"] for r in with_evidence) / n, 3),
+    }
 
 
 def summarise(results: list[dict], user_year_mode: str) -> dict:
@@ -109,7 +145,7 @@ def summarise(results: list[dict], user_year_mode: str) -> dict:
 
     judged = [r["judge"] for r in answerable]
     generate_times = [r["latency_s"]["generate"] for r in results]
-    total_times = [r["latency_s"]["retrieve"] + r["latency_s"]["generate"] for r in results]
+    total_times = [sum(r["latency_s"].values()) for r in results]  # rewrite + retrieve + generate
     return {
         "questions": len(results),
         "answerable": len(answerable),
@@ -121,6 +157,7 @@ def summarise(results: list[dict], user_year_mode: str) -> dict:
             "hit@10": hit_at(10),
             "mrr@10": round(sum(1 / rank for rank in ranks if rank) / len(answerable), 3),
             "all_sources_in_context": round(sum(r["all_sources_in_context"] for r in answerable) / len(answerable), 3),
+            **evidence_summary(answerable),
         },
         "answers (answerable, LLM-judged)": {
             "correct": round(judged.count("CORRECT") / len(answerable), 3),
@@ -139,7 +176,8 @@ def summarise(results: list[dict], user_year_mode: str) -> dict:
             "embed_model": config.EMBED_MODEL, "llm_model": config.LLM_MODEL,
             "chunk_size": config.CHUNK_SIZE, "chunk_overlap": config.CHUNK_OVERLAP, "top_k": config.TOP_K,
             "chunk_headers": config.CHUNK_HEADERS, "filter_by_question_year": config.FILTER_BY_QUESTION_YEAR,
-            "user_year": user_year_mode,
+            "query_rewrite": config.QUERY_REWRITE, "user_year": user_year_mode,
+            "collection": config.COLLECTION, "clean_corpus": config.CLEAN_CORPUS, "exclude_templates": config.EXCLUDE_TEMPLATES,
         },
     }
 
@@ -150,17 +188,24 @@ def main() -> None:
     parser.add_argument("--limit", type=int, default=None, help="only run the first N questions")
     parser.add_argument("--user-year", choices=["none", "simulated"], default="none",
                         help="simulated: pretend each asker told us their year (see simulated_user_year)")
+    parser.add_argument("--golden", default=str(GOLDEN_PATH), help="question file, e.g. evals/golden_student.jsonl")
+    parser.add_argument("--split", choices=["dev", "test", "all"], default="dev",
+                        help="dev: tune and inspect failures here. test: held out, report totals only.")
     args = parser.parse_args()
 
-    items = [json.loads(line) for line in GOLDEN_PATH.read_text(encoding="utf-8").splitlines() if line.strip()]
+    items = [json.loads(line) for line in Path(args.golden).read_text(encoding="utf-8").splitlines() if line.strip()]
+    if args.split != "all":
+        items = [item for item in items if item.get("split") == args.split]
     items = items[: args.limit]
-    page_years = {doc.id: doc.metadata.get("year", "") for doc in load_documents(config.CORPUS_PATH)}
+    corpus = load_documents(config.CORPUS_PATH)
+    page_years = {doc.id: doc.metadata.get("year", "") for doc in corpus}
+    if config.CLEAN_CORPUS:
+        DUPLICATE_OF.update(clean(corpus).duplicate_of)
 
     RESULTS_DIR.mkdir(exist_ok=True)
     results = []
     for number, item in enumerate(items, start=1):
-        user_year = simulated_user_year(item, page_years) if args.user_year == "simulated" else None
-        results.append(evaluate_one(item, user_year))
+        results.append(evaluate_one(item, student_for(item, args.user_year, page_years)))
         print(f"  {number}/{len(items)}  {item['id']}", end="\r")
     print()
 
@@ -168,6 +213,8 @@ def main() -> None:
         for r in results:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
     summary = summarise(results, args.user_year)
+    summary["config"]["split"] = args.split
+    summary["config"]["golden"] = Path(args.golden).name
     (RESULTS_DIR / f"{args.name}_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     print(json.dumps(summary, indent=2))
 

@@ -11,24 +11,29 @@ Rules:
 - Use ONLY the numbered context passages below. Do not use outside knowledge.
 - After each claim, cite the passage(s) it comes from, like [1] or [2][3].
 - If the context does not contain the answer, reply exactly: I don't know
+- If a "Student" line is given, use it to understand "today", "this week", "my block" and similar.
 - Be concise: a few sentences, or short steps for "how do I" questions."""
 
 
-def build_prompt(question: str, chunks: list[dict]) -> str:
-    """Number the chunks so the model can cite them as [1], [2], ..."""
+def build_prompt(question: str, chunks: list[dict], student: str = "") -> str:
+    """Number the chunks so the model can cite them as [1], [2], ...
+
+    student: e.g. "Today is Tuesday 24 November 2026. The student is in Year 2, Block B, week 3 (...)".
+    """
     passages = []
     for number, chunk in enumerate(chunks, start=1):
         passages.append(f"[{number}] (page: {chunk['title']})\n{chunk['text']}")
     context = "\n\n".join(passages)
-    return f"Context:\n\n{context}\n\nQuestion: {question}"
+    student_line = f"Student: {student}\n\n" if student else ""
+    return f"Context:\n\n{context}\n\n{student_line}Question: {question}"
 
 
-def generate(question: str, chunks: list[dict]) -> str:
+def generate(question: str, chunks: list[dict], student: str = "") -> str:
     response = ollama.chat(
         model=config.LLM_MODEL,
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": build_prompt(question, chunks)},
+            {"role": "user", "content": build_prompt(question, chunks, student)},
         ],
         think=False,  # qwen3 can "think" first; off = faster answers
         options={"temperature": 0, "num_ctx": 8192},
