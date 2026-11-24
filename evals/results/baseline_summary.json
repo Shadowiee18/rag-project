@@ -1,0 +1,33 @@
+{
+  "questions": 62,
+  "answerable": 54,
+  "unanswerable": 8,
+  "retrieval": {
+    "hit@1": 0.593,
+    "hit@3": 0.796,
+    "hit@5 (what the LLM sees)": 0.87,
+    "hit@10": 0.926,
+    "mrr@10": 0.712,
+    "all_sources_in_context": 0.796
+  },
+  "answers (answerable, LLM-judged)": {
+    "correct": 0.333,
+    "partial": 0.574,
+    "wrong": 0.093,
+    "false_refusals": 0.093,
+    "cites_sources": 0.907
+  },
+  "unanswerable_correctly_refused": 0.875,
+  "latency_s": {
+    "generate_median": 10.05,
+    "total_median": 11.41,
+    "total_max": 12.93
+  },
+  "config": {
+    "embed_model": "qwen3-embedding:0.6b",
+    "llm_model": "qwen3:8b",
+    "chunk_size": 1500,
+    "chunk_overlap": 200,
+    "top_k": 5
+  }
+}

@@ -1,0 +1,10 @@
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.20.2
+    ports:
+      - "6333:6333" # REST API + web dashboard at http://localhost:6333/dashboard
+    volumes:
+      - qdrant_data:/qdrant/storage # keeps your vectors when the container restarts
+
+volumes:
+  qdrant_data:
