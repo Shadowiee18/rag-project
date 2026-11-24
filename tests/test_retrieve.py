@@ -1,6 +1,6 @@
 import pytest
 
-from ragapp.ingest import chunk_header
+from ragapp.ingest import chunk_header, label
 from ragapp.retrieve import year_block_in_question
 
 
@@ -23,6 +23,12 @@ from ragapp.retrieve import year_block_in_question
 )
 def test_year_block_in_question(question, expected):
     assert year_block_in_question(question) == expected
+
+
+def test_label_splits_merged_blocks_into_a_list():
+    assert label("BlockA BlockB") == ["BlockA", "BlockB"]
+    assert label("BlockB") == "BlockB"
+    assert label("") == ""
 
 
 def test_chunk_header_uses_readable_path_and_title():
