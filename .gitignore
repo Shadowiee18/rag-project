@@ -10,3 +10,7 @@ data/raw/*
 evals/golden_set.jsonl
 evals/drafts/
 evals/results/*.jsonl
+evals/golden_student.jsonl
+
+# Corpus analysis output names course pages
+analysis/output/

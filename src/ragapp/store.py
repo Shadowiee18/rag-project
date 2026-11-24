@@ -28,15 +28,20 @@ def add_chunks(client: QdrantClient, start_id: int, vectors: list[list[float]], 
     client.upsert(collection_name=config.COLLECTION, points=points)
 
 
-def year_block_filter(year: str, blocks: list[str] | None) -> Filter:
+def build_filter(year: str | None, blocks: list[str] | None) -> Filter | None:
     """Keep chunks from this year (and these blocks), plus chunks that belong to no year/block.
+    Leave out template pages (if the index tags them and EXCLUDE_TEMPLATES is on).
 
     The "" option matters: shared Study Content pages have no year, and must stay searchable.
     """
-    conditions = [FieldCondition(key="year", match=MatchAny(any=[year, ""]))]
-    if blocks:
-        conditions.append(FieldCondition(key="block", match=MatchAny(any=[*blocks, ""])))
-    return Filter(must=conditions)
+    must, must_not = [], []
+    if year:
+        must.append(FieldCondition(key="year", match=MatchAny(any=[year, ""])))
+        if blocks:
+            must.append(FieldCondition(key="block", match=MatchAny(any=[*blocks, ""])))
+    if config.EXCLUDE_TEMPLATES:
+        must_not.append(FieldCondition(key="page_type", match=MatchAny(any=["template"])))
+    return Filter(must=must, must_not=must_not) if (must or must_not) else None
 
 
 def search(
@@ -46,7 +51,7 @@ def search(
     result = client.query_points(
         collection_name=config.COLLECTION,
         query=query_vector,
-        query_filter=year_block_filter(year, blocks) if year else None,
+        query_filter=build_filter(year, blocks),
         limit=k,
         with_payload=True,
     )
