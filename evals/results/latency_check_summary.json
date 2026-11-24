@@ -1,0 +1,36 @@
+{
+  "questions": 6,
+  "answerable": 6,
+  "unanswerable": 0,
+  "retrieval": {
+    "hit@1": 0.667,
+    "hit@3": 1.0,
+    "hit@5 (what the LLM sees)": 1.0,
+    "hit@10": 1.0,
+    "mrr@10": 0.833,
+    "all_sources_in_context": 1.0
+  },
+  "answers (answerable, LLM-judged)": {
+    "correct": 0.833,
+    "partial": 0.0,
+    "wrong": 0.167,
+    "false_refusals": 0.167,
+    "cites_sources": 0.833
+  },
+  "unanswerable_correctly_refused": null,
+  "latency_s": {
+    "generate_median": 2.09,
+    "total_median": 2.51,
+    "total_max": 3.4
+  },
+  "config": {
+    "embed_model": "qwen3-embedding:0.6b",
+    "llm_model": "qwen3:8b",
+    "chunk_size": 1500,
+    "chunk_overlap": 200,
+    "top_k": 5,
+    "chunk_headers": false,
+    "filter_by_question_year": false,
+    "user_year": "none"
+  }
+}

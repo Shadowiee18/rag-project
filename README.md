@@ -48,3 +48,50 @@ uv add <package>        # add a dependency when a phase needs it
 ```
 
 Start here: [phase0/README.md](phase0/README.md)
+
+## Phase 1: baseline RAG
+
+Everything runs locally: answers never leave your PC.
+
+| Part | What | Where |
+|---|---|---|
+| LLM | `qwen3:8b` | Ollama |
+| Embeddings | `qwen3-embedding:0.6b` (1024 dims) | Ollama |
+| Vector DB | Qdrant `v1.20.2` | Docker Compose |
+| Corpus | 506 course pages, `data/raw/adsai_pages.jsonl` | not in git |
+
+```
+docker compose up -d                                   # start Qdrant (dashboard: http://localhost:6333/dashboard)
+uv run python -m ragapp.ingest                         # indexing time: chunk + embed + store every page
+uv run python -m ragapp.rag "How do I get VPN access?" # ask one question from the terminal
+uv run uvicorn ragapp.api:app --reload                 # or as an API: http://127.0.0.1:8000/docs
+uv run python evals/run_eval.py --name baseline        # score it against the golden set
+```
+
+Pipeline: `ingest.py` (chunking → embed → store) at indexing time; `rag.py` (retrieve → generate) at query time.
+All settings live in `src/ragapp/config.py`.
+
+The golden set and per-question results contain course material, so they stay out of git.
+Only the `*_summary.json` numbers are committed.
+
+## Results
+
+Golden set: 62 questions (54 answerable, 8 unanswerable). Local `qwen3:8b` + `qwen3-embedding:0.6b`, top 5 chunks.
+
+| Run | What changed | hit@1 | hit@5 | MRR@10 | all pages in context | correct* | wrong* | false "I don't know" | unanswerable refused |
+|---|---|---|---|---|---|---|---|---|---|
+| `baseline` | naive 1500-char chunks | 59% | 87% | 0.71 | 80% | 33% | 9% | 9% | 7/8 |
+| `exp1_headers` | + "Year 2 · Block B · title" header on every chunk | 63% | 87% | 0.73 | 80% | 39% | 7% | 7% | 7/8 |
+| `exp2b_filter` | + year/block filter read from the question | 67% | 93% | 0.77 | 87% | 41% | 6% | 4% | 6/8 |
+| `exp3b_user_year` | + student's own year when the question names none (simulated) | **70%** | **93%** | **0.80** | **87%** | **44%** | 6% | 4% | 7/8 |
+
+\* judged by the same local model against the expected answer: treat as rough. Retrieval numbers are exact.
+With 54 answerable questions, one question ≈ 2 points.
+
+Lessons so far:
+- Most baseline misses were year/block questions: every block has look-alike "DataLab"/deadline pages,
+  and chunks didn't say which block they came from. Headers + filtering fixed most of them.
+- The eval caught a bug: questions naming two blocks ("Block A and Block B") only kept the first.
+- "Right page in top 5" is too generous: big block pages have 20+ chunks, and the retrieved one
+  often isn't the chunk with the answer (b14, b27). Next: measure whether the answer *chunk* is retrieved.
+- Baseline latency (10 s) was an eval bug (Ollama reloaded the model on every call); real answers take ~2 s.

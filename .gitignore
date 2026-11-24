@@ -5,3 +5,8 @@ __pycache__/
 .env
 data/raw/*
 !data/raw/.gitkeep
+
+# Built from login-protected course material: keep out of the (public) repo.
+evals/golden_set.jsonl
+evals/drafts/
+evals/results/*.jsonl
