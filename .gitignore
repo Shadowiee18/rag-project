@@ -22,3 +22,4 @@ HANDOFF.md
 
 # Downloaded model files (rerankers, BM25), fetched on first use
 models/
+evals/results/*.err

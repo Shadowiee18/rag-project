@@ -196,3 +196,32 @@ Defaults decided:
 - `CLEAN_CORPUS=1` (and `COLLECTION` follows it: `adsai_chunks_clean`): no measurable cost, cleaner context, smaller index.
 - `QUERY_REWRITE=0`: v2's gains and losses are each about one question, and it costs an extra LLM call.
   Its failure mode (answer chunk just outside the top 5) is what a reranker fixes, so v2 is re-tested together with reranking.
+
+### Reranking: a cross-encoder re-sorts the top 30
+
+Vector search fetches 30 chunks; a cross-encoder (fastembed, ONNX on CPU) reads each one together with the question
+and the best 5 go to the LLM. Baseline is `clean` (the current default). Dev split only.
+
+| Set | Config | hit@1 | hit@5 | MRR@10 | all evidence @5 | correct | wrong | unanswerable refused | median latency |
+|---|---|---|---|---|---|---|---|---|---|
+| page | `clean` | 64% | 89% | 0.76 | 57% | 39% | 7% | 4/4 | 3.5 s |
+| page | `rerank_small` (MiniLM-L6, 0.08 GB) | 82% | 96% | 0.89 | 68% | 54% | 0% | 4/4 | 4.1 s |
+| page | `rerank_base` (bge-reranker-base, 1.04 GB) | **96%** | **100%** | **0.97** | **82%** | **64%** | 0% | 4/4 | 9.8 s |
+| page | `v2_rerank_base` (+ rewrite v2) | 96% | 96% | 0.96 | 82% | 61% | 0% | 3/4 | 10.4 s |
+| student | `clean` | 33% | 47% | 0.38 | 20% | 13% | 13% | 2/2 | 3.5 s |
+| student | `rerank_small` | 33% | 47% | 0.39 | 27% | 20% | 0% | 2/2 | 4.0 s |
+| student | `rerank_base` | 27% | 53% | 0.37 | 33% | 20% | 7% | 2/2 | 10.2 s |
+| student | `v2_rerank_base` (+ rewrite v2) | **40%** | **73%** | **0.55** | 33% | 20% | 0% | 2/2 | 10.6 s |
+
+Findings:
+- **First clear win of Phase 2.** On page-style, `rerank_base` puts the right page first for 9 more questions and loses none;
+  all answer evidence reaches the LLM for 7 more, losing none. Far beyond the one-question noise floor.
+- **Size matters.** The small model gets about half of that gain at +0.6 s; the base model all of it at +6.5 s per question
+  (CPU, 30 chunks of ~400 tokens).
+- **Rewrite v2 pays off only with a reranker.** Its extra queries add candidates, and the reranker sorts them. On student
+  questions hit@5 goes 47% → 73% (+4 questions), mostly "this week / next week" questions found through the student's
+  week that the code adds to the query. Without a reranker those candidates landed just outside the top 5.
+  On page-style it costs one question of hit@5 and one unanswerable refusal.
+- **Latency is the price:** about 10 s per answer with the base model, against 3.5 s now.
+- Caveat: the correct/wrong columns use the local judge, whose label parsing has a known bug (a reply containing
+  "INCORRECT" counts as CORRECT); retrieval columns are exact.
