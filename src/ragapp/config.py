@@ -37,3 +37,7 @@ TOP_K = 5
 # plus pages that belong to no year (all the shared Study Content).
 # On by default since experiment 2 (see README results).
 FILTER_BY_QUESTION_YEAR = os.getenv("FILTER_BY_QUESTION_YEAR", "1") == "1"
+
+# Rewrite the question before searching (see rewrite.py):
+#   "0" off | "1" v1, LLM writes one query (rejected by the eval) | "2" v2, multi-query + RRF
+QUERY_REWRITE = os.getenv("QUERY_REWRITE", "0")
