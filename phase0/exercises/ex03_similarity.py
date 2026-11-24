@@ -6,6 +6,8 @@ pointing in the most similar direction to the query vector.
 Run the tests:  uv run pytest -k ex03
 """
 
+import math
+
 
 def dot(a: list[float], b: list[float]) -> float:
     """Dot product: sum of a[i] * b[i]. Raise ValueError if the lengths differ.
@@ -13,7 +15,13 @@ def dot(a: list[float], b: list[float]) -> float:
     >>> dot([1, 2, 3], [4, 5, 6])
     32
     """
-    raise NotImplementedError
+    if len(a) != len(b):
+        raise ValueError("vectors must have the same length")
+
+    total = 0
+    for x, y in zip(a, b):
+        total += x * y
+    return total
 
 
 def norm(a: list[float]) -> float:
@@ -22,7 +30,7 @@ def norm(a: list[float]) -> float:
     >>> norm([3, 4])
     5.0
     """
-    raise NotImplementedError
+    return math.sqrt(dot(a, a))
 
 
 def cosine_similarity(a: list[float], b: list[float]) -> float:
@@ -32,7 +40,15 @@ def cosine_similarity(a: list[float], b: list[float]) -> float:
     Raise ValueError if the lengths differ.
     Return 0.0 if either vector is all zeros (you can't divide by zero).
     """
-    raise NotImplementedError
+    if len(a) != len(b):
+        raise ValueError("vectors must have the same length")
+
+    length_a = norm(a)
+    length_b = norm(b)
+    if length_a == 0 or length_b == 0:
+        return 0.0
+
+    return dot(a, b) / (length_a * length_b)
 
 
 def top_k(query: list[float], docs: dict[str, list[float]], k: int) -> list[tuple[str, float]]:
@@ -41,4 +57,9 @@ def top_k(query: list[float], docs: dict[str, list[float]], k: int) -> list[tupl
     Use cosine similarity. Sort highest first. When scores are equal, sort ids alphabetically.
     If there are fewer than k docs, return all of them.
     """
-    raise NotImplementedError
+    scores = []
+    for doc_id, vector in docs.items():
+        scores.append((doc_id, cosine_similarity(query, vector)))
+
+    sorted_scores = sorted(scores, key=lambda pair: (-pair[1], pair[0]))
+    return sorted_scores[:k]

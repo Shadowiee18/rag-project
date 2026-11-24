@@ -11,11 +11,13 @@ then open http://127.0.0.1:8000/docs
 Run the tests:  uv run pytest -k ex06
 """
 
-from fastapi import FastAPI
+from typing import Annotated
 
-# from ex01_word_freq import tokenize
-# from ex04_bm25 import BM25
-# from ex05_documents import Document
+from fastapi import FastAPI, HTTPException, Query
+
+from ex01_word_freq import tokenize
+from ex04_bm25 import BM25
+from ex05_documents import Document
 
 
 def create_app() -> FastAPI:
@@ -49,4 +51,41 @@ def create_app() -> FastAPI:
 
     Hints: HTTPException, status_code=201 on the decorator, fastapi.Query(ge=..., le=..., min_length=...).
     """
-    raise NotImplementedError
+    app = FastAPI(title="Phase 0 search API")
+
+    # In-memory "database": doc id -> Document. Gone when the app stops.
+    documents: dict[str, Document] = {}
+
+    @app.get("/health")
+    def health():
+        return {"status": "ok"}
+
+    @app.post("/documents", status_code=201)
+    def add_document(doc: Document):
+        if doc.id in documents:
+            raise HTTPException(status_code=409, detail=f"Document {doc.id!r} already exists")
+        documents[doc.id] = doc
+        return {"id": doc.id}
+
+    @app.get("/documents/{doc_id}")
+    def get_document(doc_id: str):
+        if doc_id not in documents:
+            raise HTTPException(status_code=404, detail=f"Document {doc_id!r} not found")
+        return documents[doc_id]
+
+    @app.get("/search")
+    def search(
+        q: Annotated[str, Query(min_length=1)],
+        k: Annotated[int, Query(ge=1, le=20)] = 3,
+    ):
+        if not documents:
+            return {"results": []}
+
+        docs = list(documents.values())
+        bm25 = BM25([tokenize(doc.text) for doc in docs])
+        hits = bm25.search(tokenize(q), k)
+
+        results = [{"id": docs[index].id, "score": score} for index, score in hits]
+        return {"results": results}
+
+    return app
