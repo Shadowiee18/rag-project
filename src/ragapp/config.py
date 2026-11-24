@@ -42,3 +42,10 @@ FILTER_BY_QUESTION_YEAR = os.getenv("FILTER_BY_QUESTION_YEAR", "1") == "1"
 #   "0" off | "1" v1, LLM writes one query (rejected by the eval) | "2" v2, multi-query + RRF
 # Off by default: on dev, v2 moved every metric by about one question either way (noise level) and adds an LLM call.
 QUERY_REWRITE = os.getenv("QUERY_REWRITE", "0")
+
+# Rerank (see rerank.py): vector search finds RERANK_CANDIDATES chunks, a cross-encoder re-sorts them.
+# "" = off. Models measured: "Xenova/ms-marco-MiniLM-L-6-v2" (0.08 GB), "BAAI/bge-reranker-base" (1.04 GB).
+RERANK_MODEL = os.getenv("RERANK_MODEL", "")
+RERANK_CANDIDATES = 30
+# Downloaded model files (git-ignored). fastembed's default is the temp folder, which Windows cleans up.
+MODEL_CACHE = PROJECT_ROOT / "models"
