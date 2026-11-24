@@ -12,11 +12,11 @@ LLM_MODEL = "qwen3:8b"
 
 # Qdrant (started with `docker compose up -d`)
 QDRANT_URL = "http://localhost:6333"
-# Separate collections let two indexes exist side by side, e.g. COLLECTION=adsai_chunks_clean
-COLLECTION = os.getenv("COLLECTION", "adsai_chunks")
-
 # Apply the corpus-EDA cleaning rules at ingest (see cleaning.py). Needs a re-ingest when changed.
-CLEAN_CORPUS = os.getenv("CLEAN_CORPUS", "0") == "1"
+# On by default since the Phase 2 dev comparison (see README): same retrieval, tidier context.
+CLEAN_CORPUS = os.getenv("CLEAN_CORPUS", "1") == "1"
+# Separate collections let both indexes exist side by side; the default follows CLEAN_CORPUS.
+COLLECTION = os.getenv("COLLECTION", "adsai_chunks_clean" if CLEAN_CORPUS else "adsai_chunks")
 # Leave chunks of pages tagged page_type="template" out of search (only exists in a cleaned index).
 EXCLUDE_TEMPLATES = os.getenv("EXCLUDE_TEMPLATES", "1") == "1"
 
@@ -40,4 +40,5 @@ FILTER_BY_QUESTION_YEAR = os.getenv("FILTER_BY_QUESTION_YEAR", "1") == "1"
 
 # Rewrite the question before searching (see rewrite.py):
 #   "0" off | "1" v1, LLM writes one query (rejected by the eval) | "2" v2, multi-query + RRF
+# Off by default: on dev, v2 moved every metric by about one question either way (noise level) and adds an LLM call.
 QUERY_REWRITE = os.getenv("QUERY_REWRITE", "0")

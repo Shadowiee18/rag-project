@@ -156,3 +156,43 @@ expands vague words, and both queries are searched and merged (multi-query + RRF
 Both question sets are split 50/50 per question type (seed 2026): page-style 32 dev / 30 test, student-style 17 / 14.
 Per-question failures are only inspected on **dev**; **test** is reported as totals only.
 Cleaning rules come from a corpus-only EDA ([analysis/corpus_eda.py](analysis/corpus_eda.py)), not from eval failures.
+
+### Cleaning and query rewriting v2: four-way dev comparison
+
+Dev split only. Page-style: 28 answerable + 4 unanswerable (one question ≈ 3.6 points).
+Student-style: 15 answerable + 2 unanswerable (one question ≈ 6.7 points). Correct/wrong are local-judge labels.
+
+| Set | Config | hit@1 | hit@5 | MRR@10 | all evidence @5 | correct | wrong | false "I don't know" | unanswerable refused | median latency |
+|---|---|---|---|---|---|---|---|---|---|---|
+| page | `base` | 64% | 89% | 0.76 | 57% | 39% | 7% | 4% | 3/4 | 3.6 s |
+| page | `clean` | 64% | 89% | 0.76 | 57% | 39% | 7% | 4% | 4/4 | 3.5 s |
+| page | `v2` | 64% | 93% | 0.76 | 54% | 36% | 11% | 7% | 4/4 | 4.5 s |
+| page | `clean_v2` | 64% | 93% | 0.76 | 54% | 39% | 11% | 7% | 4/4 | 3.9 s |
+| student | `base` | 33% | 47% | 0.38 | 20% | 13% | 13% | 7% | 2/2 | 3.6 s |
+| student | `clean` | 33% | 47% | 0.38 | 20% | 13% | 13% | 7% | 2/2 | 3.5 s |
+| student | `v2` | 33% | 53% | 0.42 | 27% | 13% | 7% | 0% | 2/2 | 3.6 s |
+| student | `clean_v2` | 33% | 53% | 0.43 | 27% | 13% | 7% | 0% | 2/2 | 4.0 s |
+
+`clean` = `CLEAN_CORPUS=1` (454 of 506 pages; templates left out of search). `v2` = `QUERY_REWRITE=2`.
+
+Findings:
+- **Noise floor.** `v2` and `clean_v2` retrieve the same pages on page-style, yet "correct" differs by one question:
+  answer generation and judging alone move a score by about one question. Every difference below is one or two questions.
+- **Cleaning: neutral on retrieval.** No question's rank or evidence changed. It does tidy the context: template and
+  near-empty pages held 6 of 160 top-5 slots (page) and 3 of 85 (student) before cleaning; none of those swaps decided
+  whether the answer got in. One more unanswerable question was refused (within noise).
+- **Rewrite v2: a trade, not a win.** It helps short, vague student questions ("vpn?", "presentation how long",
+  "next week" questions): student hit@5 47% → 53%, all evidence 20% → 27%, wrong 13% → 7%, each one question.
+  It slightly hurts long, precise page-style questions: the expansion adds synonyms that pull in loosely related chunks,
+  and RRF pushes the exact answer chunk from rank 5 to 6 (all evidence 57% → 54%, wrong 7% → 11%). It adds an LLM call
+  (+0.4 to 0.9 s median on page-style).
+- **Bug found in v2:** in 1 of 49 queries the model copied the prompt's example format ("question -> query") into its
+  output. Not fixed yet (v2 is off); strip that pattern when v2 is revisited.
+- **Bug found in cleaning (fixed):** merging an exact duplicate kept only the surviving copy's year/block, so a page shared by
+  Year 1 Block A and Block B became invisible to the Block B filter. The merged page now keeps every block its copies were in.
+  No dev question searches that page with a block filter, so the numbers above are unaffected.
+
+Defaults decided:
+- `CLEAN_CORPUS=1` (and `COLLECTION` follows it: `adsai_chunks_clean`): no measurable cost, cleaner context, smaller index.
+- `QUERY_REWRITE=0`: v2's gains and losses are each about one question, and it costs an extra LLM call.
+  Its failure mode (answer chunk just outside the top 5) is what a reranker fixes, so v2 is re-tested together with reranking.
