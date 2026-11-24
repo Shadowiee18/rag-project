@@ -1,0 +1,45 @@
+{
+  "questions": 17,
+  "answerable": 15,
+  "unanswerable": 2,
+  "retrieval": {
+    "hit@1": 0.333,
+    "hit@3": 0.4,
+    "hit@5 (what the LLM sees)": 0.467,
+    "hit@10": 0.467,
+    "mrr@10": 0.38,
+    "all_sources_in_context": 0.333,
+    "evidence_found@5": 0.283,
+    "all_evidence_found@5": 0.2,
+    "evidence_found@10": 0.317
+  },
+  "answers (answerable, LLM-judged)": {
+    "correct": 0.133,
+    "partial": 0.733,
+    "wrong": 0.133,
+    "false_refusals": 0.067,
+    "cites_sources": 0.933
+  },
+  "unanswerable_correctly_refused": 1.0,
+  "latency_s": {
+    "generate_median": 3.18,
+    "total_median": 3.61,
+    "total_max": 8.16
+  },
+  "config": {
+    "embed_model": "qwen3-embedding:0.6b",
+    "llm_model": "qwen3:8b",
+    "chunk_size": 1500,
+    "chunk_overlap": 200,
+    "top_k": 5,
+    "chunk_headers": true,
+    "filter_by_question_year": true,
+    "query_rewrite": false,
+    "user_year": "none",
+    "collection": "adsai_chunks",
+    "clean_corpus": false,
+    "exclude_templates": true,
+    "split": "dev",
+    "golden": "golden_student.jsonl"
+  }
+}
