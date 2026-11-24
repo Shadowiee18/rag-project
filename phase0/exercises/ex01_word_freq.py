@@ -3,7 +3,6 @@
 Run the tests:  uv run pytest -k ex01
 """
 
-
 def tokenize(text: str) -> list[str]:
     """Split text into lowercase tokens.
 
@@ -13,9 +12,15 @@ def tokenize(text: str) -> list[str]:
     >>> tokenize("Hello, World! RAG-2026")
     ['hello', 'world', 'rag', '2026']
 
-    Hint: the `re` module.
+    Hint: no regex needed. Plain string methods are enough, but text.lower().split()
+    on its own won't pass: "Hello," would keep its comma. Deal with the punctuation
+    first, character by character, then split. str.isalnum() can help.
     """
-    raise NotImplementedError
+
+
+    tokens = "".join(char if char.isalnum() else " " for char in text).lower().split()
+    return tokens
+
 
 
 def word_counts(tokens: list[str]) -> dict[str, int]:
@@ -26,7 +31,13 @@ def word_counts(tokens: list[str]) -> dict[str, int]:
 
     Write it with a plain dict first. Then look up collections.Counter.
     """
-    raise NotImplementedError
+    word_counter = {}
+    for token in tokens:
+        if token not in word_counter:
+            word_counter[token] = 1
+        else:
+            word_counter[token] += 1
+    return word_counter
 
 
 def top_k_words(text: str, k: int) -> list[tuple[str, int]]:
@@ -40,4 +51,7 @@ def top_k_words(text: str, k: int) -> list[tuple[str, int]]:
 
     Hint: sorted(..., key=...) with a tuple key.
     """
-    raise NotImplementedError
+    tokens = tokenize(text)
+    counts = word_counts(tokens)
+    sorted_pairs = sorted(counts.items(), key=lambda pair: (-pair[1], pair[0]))
+    return sorted_pairs[:k]
