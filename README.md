@@ -140,7 +140,7 @@ Findings:
 ### Query rewriting v1: rejected
 
 An LLM (`qwen3:8b`) rewrote each question into a search query, given the student's date/year/block/week
-(`student.py` reads the block timeline: 24 Nov 2026 = Year 2 Block B week 3).
+(`student.py` finds today's week in the dated week rows on the student's block page).
 
 | Set | hit@5 without → with rewrite | wrong answers | false "I don't know" |
 |---|---|---|---|

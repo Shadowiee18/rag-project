@@ -8,7 +8,7 @@ from functools import lru_cache
 from ragapp import config
 from ragapp.documents import load_documents
 
-# A timeline row on a block page, e.g. "W3 23.11–27.11 | Computer Vision | Tasks 4-5"
+# A timeline row on a block page, e.g. "W2 16.11–20.11 | Topic Alpha | Tasks 1-2" (week, dates, then the plan)
 WEEK_ROW = re.compile(r"^W(\d{1,2}) (\d{2})\.(\d{2})[–-](\d{2})\.(\d{2})\s*\|(.*)$", re.MULTILINE)
 
 
@@ -26,7 +26,7 @@ def nearest_year(day: int, month: int, today: date) -> date:
 
 
 def find_week(page_text: str, today: date) -> dict | None:
-    """Return {'week': 3, 'start': date, 'end': date, 'plan': '...'} for the timeline row containing today."""
+    """Return {'week': 2, 'start': date, 'end': date, 'plan': '...'} for the timeline row containing today."""
     for m in WEEK_ROW.finditer(page_text):
         start = nearest_year(int(m.group(2)), int(m.group(3)), today)
         end = nearest_year(int(m.group(4)), int(m.group(5)), today)
@@ -42,7 +42,7 @@ def _pages() -> dict[str, str]:
 
 
 def search_phrase(ctx: StudentContext) -> str:
-    """Words for a search query, e.g. 'Year 2 Block B week 3'. Added by code, never by the LLM."""
+    """Words for a search query, e.g. 'Year 2 Block B week 2'. Added by code, never by the LLM."""
     if not ctx.year:
         return ""
     parts = [ctx.year.replace("Year", "Year "), re.sub(r"^(Block|Semester)(\w)$", r"\1 \2", ctx.block) if ctx.block else ""]
@@ -54,9 +54,9 @@ def search_phrase(ctx: StudentContext) -> str:
 
 def describe(ctx: StudentContext, with_plan: bool = True) -> str:
     """One or two plain sentences the LLM can use, e.g.
-    'Today is Tuesday 24 November 2026. The student is in Year 2, Block B, week 3 (23.11–27.11): Computer Vision | Tasks 4-5.'
+    'Today is Wednesday 18 November 2026. The student is in Year 2, Block B, week 2 (16.11–20.11): Topic Alpha | Tasks 1-2.'
 
-    with_plan=False leaves out the week's plan (": Computer Vision | Tasks 4-5"). The query rewriter gets that
+    with_plan=False leaves out the week's plan (": Topic Alpha | Tasks 1-2"). The query rewriter gets that
     version, because a small model copies those words into unrelated search queries.
     """
     text = f"Today is {ctx.today.strftime('%A')} {ctx.today.day} {ctx.today.strftime('%B %Y')}."
