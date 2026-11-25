@@ -1,387 +1,181 @@
-# RAG Project
+# Local RAG study assistant
 
-An evaluated, production-style RAG system, built one layer at a time.
-The goal is a portfolio project you can explain line by line in an interview.
+A question-answering system over a university programme's course site: 506 login-protected pages covering three
+study years. A student asks "is using an LLM allowed for the assignment?" or "what is due this week?" and gets a
+short answer with numbered citations to the course pages, or "I don't know" when the pages don't say.
 
-## Rules
+Everything runs on one desktop PC (8 GB GPU): the LLM, the embeddings, the vector database and the rerankers.
+No question or course page leaves the machine.
 
-1. **Write the first version yourself.** Use AI to review, explain, or give hints, not to write the code.
-2. **Measure before you optimise.** Every retrieval change gets a before/after number in the results table.
-3. **Commit after every exercise or feature.** Small commits with clear messages.
-4. **LeetCode, 20–30 min a day:** easy/medium problems on arrays, hashmaps, two pointers, BFS/DFS and heaps.
-
-## Phases
-
-| Phase | Weeks | What you build | Done when |
-|---|---|---|---|
-| 0 Refresher | 1–2 | Exercises in `phase0/` | `uv run pytest` is all green and the Docker task works |
-| 1 Baseline RAG | 3–4 | Load → chunk → embed → vector DB → answer with citations | 50+ questions in `evals/golden_set.jsonl` and a baseline score |
-| 2 Advanced retrieval | 5–7 | Heading-aware chunking, BM25 + vector hybrid (RRF), reranker, query rewriting | Results table with a measured gain for each change |
-| 3 Agent layer | 8–9 | Router (search or not), multi-step retrieval, "I don't know" | Eval includes unanswerable questions and they pass |
-| 4 LLMOps | 10–12 | Tracing, evals in CI, cost/latency tracking, guardrails, Docker deploy; serving under load (below) | A PR that lowers quality fails CI; load-test table Ollama vs vLLM |
-
-### Phase 4: serving many users
-
-Almost all answer time is the LLM writing (~2 s), not search (~0.3 s), so with many students the
-problem is throughput: one GPU queues requests. Plan, all free on the local GPU:
-
-1. **Load test first** with Locust: 1, 10 and 50 simultaneous users. Record time to first token,
-   median and p95 total latency, and answers per second.
-2. **Streaming** answers from the API (same total time, but the answer starts almost at once).
-3. **Semantic cache**: reuse answers for near-identical questions (question embeddings in Qdrant), with expiry.
-4. **vLLM vs Ollama**: serve a 4-bit ~8B model with vLLM (Docker + WSL2 GPU, OpenAI-compatible API,
-   continuous batching) behind a config switch in `generate.py`. Same load test, plus the 62-question
-   eval to check the compressed model's quality. Result: one table of speed and quality for both.
-| Ship | — | README diagram, results table, demo video, write-up | Someone else can run it from the README |
-
-## Target layout (fill in as you go)
-
-```
-src/ragapp/
-  ingest.py      # Phase 1: read files from data/raw into Document objects
-  chunking.py    # Phase 1: reuse what you learned in phase0 ex02
-  embed.py       # Phase 1: turn chunks into vectors
-  store.py       # Phase 1: vector DB (pgvector or Qdrant)
-  retrieve.py    # Phase 2: hybrid search + reranking
-  generate.py    # Phase 1: prompt the LLM with retrieved chunks, return answer + citations
-  api.py         # Phase 1: FastAPI app (you practise this in phase0 ex06)
-evals/
-  golden_set.jsonl   # your questions + expected answers (start from the .example file)
-  run_eval.py        # Phase 1: scores the system against the golden set
-data/raw/            # your documents (ignored by git)
-```
-
-## Commands
-
-```
-uv sync                 # install dependencies
-uv run pytest           # run all tests
-uv run pytest -k ex01   # run one exercise's tests
-uv add <package>        # add a dependency when a phase needs it
-```
-
-Start here: [phase0/README.md](phase0/README.md)
-
-## Phase 1: baseline RAG
-
-Everything runs locally: answers never leave your PC.
-
-| Part | What | Where |
-|---|---|---|
-| LLM | `qwen3:8b` | Ollama |
-| Embeddings | `qwen3-embedding:0.6b` (1024 dims) | Ollama |
-| Vector DB | Qdrant `v1.20.2` | Docker Compose |
-| Corpus | 506 course pages, `data/raw/adsai_pages.jsonl` | not in git |
-
-```
-docker compose up -d                                   # start Qdrant (dashboard: http://localhost:6333/dashboard)
-uv run python -m ragapp.ingest                         # indexing time: chunk + embed + store every page
-uv run python -m ragapp.bm25                           #   + keyword index for hybrid search (2 s)
-uv run python -m ragapp.colbert                        #   + ColBERT vectors for the default reranker (5 min)
-uv run python -m ragapp.rag "How do I get VPN access?" # ask one question from the terminal
-uv run uvicorn ragapp.api:app --reload                 # or as an API: http://127.0.0.1:8000/docs
-uv run python evals/run_eval.py --name baseline        # score it against the golden set
-```
-
-Pipeline: `ingest.py` (chunking → embed → store) at indexing time; `rag.py` (retrieve → generate) at query time.
-All settings live in `src/ragapp/config.py`.
-
-The golden set and per-question results contain course material, so they stay out of git.
-Only the `*_summary.json` numbers are committed.
+The project is built evaluation-first: every retrieval change was measured on a fixed question set before it was
+kept, and several ideas were dropped because the numbers said so. The full record is in
+[evals/README.md](evals/README.md).
 
 ## Results
 
-Golden set: 62 questions (54 answerable, 8 unanswerable). Local `qwen3:8b` + `qwen3-embedding:0.6b`, top 5 chunks.
+Development split. The starting point is plain vector search over the cleaned index; the default is the current
+pipeline.
 
-| Run | What changed | hit@1 | hit@5 | MRR@10 | all pages in context | correct* | wrong* | false "I don't know" | unanswerable refused |
-|---|---|---|---|---|---|---|---|---|---|
-| `baseline` | naive 1500-char chunks | 59% | 87% | 0.71 | 80% | 33% | 7% | 9% | 7/8 |
-| `exp1_headers` | + "Year 2 · Block B · title" header on every chunk | 63% | 87% | 0.73 | 80% | 39% | 4% | 7% | 7/8 |
-| `exp2b_filter` | + year/block filter read from the question | 67% | 93% | 0.77 | 87% | 41% | 2% | 4% | 6/8 |
-| `exp3b_user_year` | + student's own year when the question names none (simulated) | **70%** | **93%** | **0.80** | **87%** | **44%** | 2% | 4% | 7/8 |
-
-\* judged by the same local model against the expected answer: treat as rough. Retrieval numbers are exact.
-With 54 answerable questions, one question ≈ 2 points.
-
-Lessons so far:
-- Most baseline misses were year/block questions: every block has look-alike "DataLab"/deadline pages,
-  and chunks didn't say which block they came from. Headers + filtering fixed most of them.
-- The eval caught a bug: questions naming two blocks ("Block A and Block B") only kept the first.
-- "Right page in top 5" is too generous: big block pages have 20+ chunks, and the retrieved one
-  often isn't the chunk with the answer (b14, b27). Next: measure whether the answer *chunk* is retrieved.
-- Baseline latency (10 s) was an eval bug (Ollama reloaded the model on every call); real answers take ~2 s.
-
-### Phase 2 start: better metrics, a strong judge, and real student questions
-
-Same system as `exp3b_user_year`. Two question sets:
-- **page-style** (62): written from the pages; uses their vocabulary.
-- **student-style** (31): written from a Year 2 Block B student's real questions ("what do i have to do for today",
-  "is using llm allowed", "vpn?"), with context today = 2026-11-24, Year 2, Block B. Approved by that student in bulk.
-
-| Set | right page in top 5 | **all answer evidence in top 5** | correct (local judge) | correct (Claude judge) |
+| | Page-style questions (28) | | Student-style questions (15) | |
 |---|---|---|---|---|
-| page-style | 93% | 61% | 44% | 63% |
-| student-style | **50%** | **18%** | 14% | not graded yet |
+| | start | **default** | start | **default** |
+| Right page ranked first | 64% | **86%** | 33% | **47%** |
+| Right page in the top 5 | 89% | **100%** | 47% | **67%** |
+| All answer evidence in the LLM's context | 57% | **71%** | 20% | **27%** |
+| Median time per answer | 3.5 s | **3.7 s** | 3.4 s | **3.6 s** |
 
-Findings:
-- **Page-level hit@5 was hiding a chunk-level problem.** With evidence phrases (short exact quotes that hold the answer),
-  only 61% of page-style questions get all their answer chunks into the top 5, against 93% for "right page".
-- **Real student questions are much harder.** Short, vague, date-dependent questions ("whats due this week") drop
-  retrieval from 93% to 50%. The system has no idea what "today" or "this week" is.
-- **A hub page.** One prompt-engineering page full of generic instructions ("your task is…") lands in the top 5 for
-  20 of 31 student questions: it is vaguely similar to every short question.
-- **Judges.** Claude graded all 62 page-style answers blind with [judge_rubric.md](evals/judge_rubric.md) (v1.1).
-  The local judge agrees on 76% (Cohen's kappa 0.57): reliable when it says "correct", too harsh with "partial",
-  and it missed two wrong answers. Faithfulness (Claude): 84%. Citations pointing at the right chunk: 61%.
-  No human checked the Claude grades.
-- **The eval set had two stale/incomplete answers** (a07 EU AI Act dates, which two course pages disagree on; b10 missing
-  "neutral"). Fixed.
+- **Page-style** questions are written from the pages and use their vocabulary. **Student-style** questions come from
+  a real student and are short, vague and date-dependent ("vpn?", "whats due this week"). They are much harder.
+- The best configuration measured (hybrid search + cross-encoder reranker) reaches 96% / 100% / 86% on page-style
+  questions, but takes 9.5 s per answer on this hardware. The default gives up 3-4 page-style questions to answer in
+  under 5 s.
 
-### Query rewriting v1: rejected
+## How it works
 
-An LLM (`qwen3:8b`) rewrote each question into a search query, given the student's date/year/block/week
-(`student.py` finds today's week in the dated week rows on the student's block page).
+```mermaid
+flowchart LR
+    subgraph Indexing
+        P[Course pages<br/>JSONL] --> C[Cleaning<br/>dedupe, drop near-empty,<br/>tag templates]
+        C --> K[1500-char chunks<br/>+ 'Year · Block · title' header]
+        K --> D[(Dense vectors<br/>qwen3-embedding)]
+        K --> B[(BM25 sparse<br/>vectors)]
+        K --> L[(ColBERT token<br/>vectors)]
+    end
+    subgraph Query
+        Q[Question<br/>+ year, block, date] --> F[Year/block filter]
+        F --> R[Query expansion<br/>+ current block week]
+        R --> H[Vector + BM25 search<br/>per query, merged with RRF]
+        H --> X[ColBERT rerank<br/>30 → 5 chunks]
+        X --> G[qwen3:8b answer<br/>with citations or<br/>'I don't know']
+    end
+    D -.-> H
+    B -.-> H
+    L -.-> X
+```
 
-| Set | hit@5 without → with rewrite | wrong answers | false "I don't know" |
-|---|---|---|---|
-| page-style | 93% → **61%** | 2% → 7% | 4% → 11% |
-| student-style | 50% → 54% | 18% → 7% | 14% → 4% |
+| Step | What it does | Why (measured on the dev split) |
+|---|---|---|
+| Chunk headers | Every chunk starts with "Year 2 · Block B · page title" before embedding | Each block has look-alike pages (deadlines, DataLab); right page first 59% → 63% |
+| Year/block filter | Searches only the year/block the question names, else the student's own, plus shared pages | Right page in top 5 87% → 93% |
+| Corpus cleaning | Rules from a corpus-only EDA: merge exact duplicates, drop near-empty pages, keep templates out of search | No retrieval change; fewer junk chunks in the context |
+| Query expansion (v2) | The LLM adds synonyms; code (not the LLM) adds the student's current week to time questions; all queries searched and merged | Within noise alone; with a reranker, student top 5 47% → 73% |
+| Hybrid search | BM25 keyword search next to vector search, merged with reciprocal rank fusion | Alone: right page first 64% → 75%, all evidence 57% → 71%, for +0.3 s |
+| ColBERT reranker | Late interaction: chunk token vectors computed at indexing time, question scored against them in Qdrant | Most of a cross-encoder's gain at 0.2 s instead of 6-7 s |
 
-The 8B model copied "Block B" from its prompt examples into 34 of 62 queries (even when the student context had no
-block) and dropped key terms ("Keras" disappeared from a Keras question). Guards in code fixed some cases but not this.
-Kept: the "Student: today is…" line in the answer prompt (fewer wrong answers on student questions).
-Rejected: letting the LLM freely edit the search query. Next design: the code adds date/block context, the LLM only
-expands vague words, and both queries are searched and merged (multi-query + RRF).
+Rejected along the way, with the numbers in the log:
+- **Letting the LLM rewrite the search query freely**: page-style top-5 hits fell from 93% to 61%. The 8B model copied
+  words from its prompt examples into unrelated queries and dropped key terms.
+- **Shortening the reranker's input** to make it faster: it missed answers further down the chunk and lost most of
+  its gain.
+- **More reranker candidates** (100 instead of 30): no gain; what vector search misses in its top 30 it also misses
+  lower down. Keyword search fixed that recall gap instead.
 
-### Method from here: dev / held-out test
+In hindsight, hybrid search should have been the baseline before the reranker was added: it gets about a third of
+the reranker's gain at almost no cost.
 
-Both question sets are split 50/50 per question type (seed 2026): page-style 32 dev / 30 test, student-style 17 / 14.
-Per-question failures are only inspected on **dev**; **test** is reported as totals only.
-Cleaning rules come from a corpus-only EDA ([analysis/corpus_eda.py](analysis/corpus_eda.py)), not from eval failures.
+## Evaluation
 
-### Cleaning and query rewriting v2: four-way dev comparison
+- **Two question sets**: 62 page-style and 33 student-style questions, each with an expected answer, the pages that
+  hold it, and short exact phrases from the answer. Unanswerable questions are included, and the expected answer is
+  "I don't know".
+- **Development / test split**: 50/50 per question type with a fixed seed. Failures are inspected on the development
+  split only; the test split is run once, at the end of a phase, and reported as totals.
+- **Retrieval metrics**: hit@k and MRR on pages, plus **chunk-level evidence**: whether the exact answer phrases are
+  in the chunks the LLM actually saw. Page-level hit@5 was 93% while only 61% of questions had all their evidence in
+  the context, so the page metric was hiding a chunk problem.
+- **Answer metrics**: a local LLM judge grades correct / partial / wrong against the expected answer. A stronger model
+  graded the same answers blind with a written rubric: 76% the same label (Cohen's kappa 0.57). Correctness numbers
+  are treated as rough; retrieval numbers are exact.
+- **Noise floor**: one question is 3.6 points (page) or 6.7 points (student) on the development split. A difference is
+  called real only when it spans several questions.
+- **The eval was reviewed too**: a review found three bugs in the eval code (judge label parsing, partial refusals,
+  and the app and eval merging result lists of different depth). Each got a failing test, a fix, and all 52 saved
+  runs were re-graded from their saved answers.
+- **CI**: 136 unit tests on every pull request. They need no LLM, database or course data: the models are faked.
 
-Dev split only. Page-style: 28 answerable + 4 unanswerable (one question ≈ 3.6 points).
-Student-style: 15 answerable + 2 unanswerable (one question ≈ 6.7 points). Correct/wrong are local-judge labels.
+## Known limitations
 
-| Set | Config | hit@1 | hit@5 | MRR@10 | all evidence @5 | correct | wrong | false "I don't know" | unanswerable refused | median latency |
-|---|---|---|---|---|---|---|---|---|---|---|
-| page | `base` | 64% | 89% | 0.76 | 57% | 39% | 4% | 4% | 3/4 | 3.6 s |
-| page | `clean` | 64% | 89% | 0.76 | 57% | 39% | 4% | 4% | 4/4 | 3.5 s |
-| page | `v2` | 64% | 93% | 0.76 | 54% | 36% | 7% | 7% | 4/4 | 4.5 s |
-| page | `clean_v2` | 64% | 93% | 0.76 | 54% | 39% | 7% | 7% | 4/4 | 3.9 s |
-| student | `base` | 33% | 47% | 0.38 | 20% | 13% | 13% | 7% | 2/2 | 3.6 s |
-| student | `clean` | 33% | 47% | 0.38 | 20% | 13% | 13% | 7% | 2/2 | 3.5 s |
-| student | `v2` | 33% | 53% | 0.42 | 27% | 13% | 7% | 0% | 2/2 | 3.6 s |
-| student | `clean_v2` | 33% | 53% | 0.43 | 27% | 13% | 7% | 0% | 2/2 | 4.0 s |
+- **Date questions** ("do I have lectures tomorrow?", "when is the next lecture?") fail. The right schedule chunk is
+  hard to retrieve, and an 8B model compares dates unreliably. Next step: a calendar route that reads the dated
+  entries in code and lets the LLM only phrase the answer.
+- **The week lookup** reads one page format; it currently works for 1 of 10 blocks. Generalising it is part of the
+  next phase.
+- **Small evaluation sets** (28 and 15 answerable questions on development): differences of one or two questions are
+  noise.
+- **Answer correctness is judged by LLMs** only; no human labels yet. The local judge also changes about 1 in 100
+  labels when the same answer is graded twice.
+- **Single-turn**: follow-up questions ("and when is it due?") are not rewritten with the earlier question.
 
-`clean` = `CLEAN_CORPUS=1` (454 of 506 pages; templates left out of search). `v2` = `QUERY_REWRITE=2`.
+## Roadmap
 
-Findings:
-- **Noise floor.** `v2` and `clean_v2` retrieve the same pages on page-style, yet "correct" differs by one question:
-  answer generation and judging alone move a score by about one question. Every difference below is one or two questions.
-- **Cleaning: neutral on retrieval.** No question's rank or evidence changed. It does tidy the context: template and
-  near-empty pages held 6 of 160 top-5 slots (page) and 3 of 85 (student) before cleaning; none of those swaps decided
-  whether the answer got in. One more unanswerable question was refused (within noise).
-- **Rewrite v2: a trade, not a win.** It helps short, vague student questions ("vpn?", "presentation how long",
-  "next week" questions): student hit@5 47% → 53%, all evidence 20% → 27%, wrong 13% → 7%, each one question.
-  It slightly hurts long, precise page-style questions: the expansion adds synonyms that pull in loosely related chunks,
-  and RRF pushes the exact answer chunk from rank 5 to 6 (all evidence 57% → 54%, wrong 4% → 7%). It adds an LLM call
-  (+0.4 to 0.9 s median on page-style).
-- **Bug found in v2:** in 1 of 49 queries the model copied the prompt's example format ("question -> query") into its
-  output. Not fixed yet (v2 is off); strip that pattern when v2 is revisited.
-- **Bug found in cleaning (fixed):** merging an exact duplicate kept only the surviving copy's year/block, so a page shared by
-  Year 1 Block A and Block B became invisible to the Block B filter. The merged page now keeps every block its copies were in.
-  No dev question searches that page with a block filter, so the numbers above are unaffected.
+1. **Routing by question type** (schedule / rules / general search / refuse), with a calendar built from the block
+   pages, and checks in code that dates, links and numbers in an answer appear in its sources.
+2. **Evaluation per segment** (question type × year/block), so a gain for one kind of question can't hide a loss
+   for another.
+3. **Operations**: tracing, the eval as a CI gate on model and prompt changes, a load test (Ollama vs vLLM),
+   streaming answers, and a container for the API.
 
-Defaults decided:
-- `CLEAN_CORPUS=1` (and `COLLECTION` follows it: `adsai_chunks_clean`): no measurable cost, cleaner context, smaller index.
-- `QUERY_REWRITE=0`: v2's gains and losses are each about one question, and it costs an extra LLM call.
-  Its failure mode (answer chunk just outside the top 5) is what a reranker fixes, so v2 is re-tested together with reranking.
+## Running it
 
-### Reranking: a cross-encoder re-sorts the top 30
+Requirements: Docker, [uv](https://docs.astral.sh/uv/), [Ollama](https://ollama.com) and an NVIDIA GPU with 8 GB
+(the 4-bit `qwen3:8b` uses about 6 GB). The rerankers run on the CPU.
 
-Vector search fetches 30 chunks; a cross-encoder (fastembed, ONNX on CPU) reads each one together with the question
-and the best 5 go to the LLM. Baseline is `clean` (the current default). Dev split only.
+The course pages are not in the repository (they are behind a login). To use your own documents, put one JSON object
+per line in `data/raw/adsai_pages.jsonl`:
 
-| Set | Config | hit@1 | hit@5 | MRR@10 | all evidence @5 | correct | wrong | unanswerable refused | median latency |
-|---|---|---|---|---|---|---|---|---|---|
-| page | `clean` | 64% | 89% | 0.76 | 57% | 39% | 4% | 4/4 | 3.5 s |
-| page | `rerank_small` (MiniLM-L6, 0.08 GB) | 82% | 96% | 0.89 | 68% | 54% | 0% | 4/4 | 4.1 s |
-| page | `rerank_base` (bge-reranker-base, 1.04 GB) | **96%** | **100%** | **0.97** | **82%** | **64%** | 0% | 4/4 | 9.8 s |
-| page | `v2_rerank_base` (+ rewrite v2) | 96% | 96% | 0.96 | 82% | 61% | 0% | 3/4 | 10.4 s |
-| student | `clean` | 33% | 47% | 0.38 | 20% | 13% | 13% | 2/2 | 3.5 s |
-| student | `rerank_small` | 33% | 47% | 0.39 | 27% | 20% | 0% | 2/2 | 4.0 s |
-| student | `rerank_base` | 27% | 53% | 0.37 | 33% | 20% | 7% | 2/2 | 10.2 s |
-| student | `v2_rerank_base` (+ rewrite v2) | **40%** | **73%** | **0.55** | 33% | 20% | 0% | 2/2 | 10.6 s |
+```json
+{"id": "Year2/BlockB/Deadlines", "text": "...", "source": "https://...", "metadata": {"title": "Deadlines", "section": "...", "year": "Year2", "block": "BlockB"}}
+```
 
-Findings:
-- **First clear win of Phase 2.** On page-style, `rerank_base` puts the right page first for 9 more questions and loses none;
-  all answer evidence reaches the LLM for 7 more, losing none. Far beyond the one-question noise floor.
-- **Size matters.** The small model gets about half of that gain at +0.6 s; the base model all of it at +6.5 s per question
-  (CPU, 30 chunks of ~400 tokens).
-- **Rewrite v2 pays off only with a reranker.** Its extra queries add candidates, and the reranker sorts them. On student
-  questions hit@5 goes 47% → 73% (+4 questions), mostly "this week / next week" questions found through the student's
-  week that the code adds to the query. Without a reranker those candidates landed just outside the top 5.
-  On page-style it costs one question of hit@5 and one unanswerable refusal.
-- **Latency is the price:** about 10 s per answer with the base model, against 3.5 s now.
-- Correct/wrong are local-judge labels; retrieval columns are exact. (All runs were re-graded after two judge fixes,
-  see "Eval fixes" below.)
+```
+uv sync
+ollama pull qwen3:8b && ollama pull qwen3-embedding:0.6b
+docker compose up -d                       # Qdrant, dashboard at http://localhost:6333/dashboard
 
-### Known gap: questions about dates ("tomorrow", "next")
+uv run python -m ragapp.ingest             # clean, chunk, embed, store
+uv run python -m ragapp.bm25               # keyword index (2 s)
+uv run python -m ragapp.colbert            # reranker index (about 5 min)
 
-Tried by hand with the default system (rerank + v2), as a Year 2 Block B student on a Wednesday:
-- **"do i have any lectures tomorrow"** → "no", for the wrong reason: it missed the block schedule and cited an *undated*
-  lecture from another course page, giving it today's date. A made-up fact with a citation.
-- **"when is the next lecture we have"** → it found the block schedule, then picked an entry from two days earlier.
+uv run python -m ragapp.rag "is using an llm allowed" --year Year2 --block BlockB
+uv run uvicorn ragapp.api:app              # GET /ask?q=...&year=Year2&block=BlockB, docs at /docs
+uv run pytest
+```
 
-Two separate failures:
-1. **Retrieval:** the schedule is one long page split into ~13 chunks; the right day's entry competes with look-alike pages.
-2. **Date reasoning:** an 8B model compares dates unreliably, even with today's date in the prompt.
+Settings live in [src/ragapp/config.py](src/ragapp/config.py); the main ones can be overridden with environment variables:
 
-Prompting won't fix date arithmetic, so the plan is code: a schedule tool (Phase 3, agent layer) that reads the dated entries
-of the student's block page and keeps those from today onwards; the LLM only phrases the answer.
-Both questions are now in the student-style set (dev split, since they were seen failing first), so the fix can be measured.
-From here on student-style dev has 19 questions instead of 17: earlier student-dev rows are not directly comparable with new runs.
+| Variable | Default | Options |
+|---|---|---|
+| `HYBRID` | `1` | `0`: vector search only |
+| `RERANK_KIND` | `colbert` | `cross`: cross-encoder (best quality, ~9.5 s per answer) |
+| `RERANK_MODEL` | `BAAI/bge-reranker-base` | `""`: no reranking |
+| `RERANK_INT8` | `0` | `1`: int8 cross-encoder, about 2× faster (`python -m ragapp.quantize` first) |
+| `RERANK_CANDIDATES` | `30` | chunks the reranker re-sorts |
+| `QUERY_REWRITE` | `2` | `0`: off |
+| `CLEAN_CORPUS` | `1` | `0`: index the raw pages (re-ingest needed) |
 
-### Speed-up round 1: fewer candidates, shorter reranker input
+## Stack
 
-Target: at most 5 s per answer. The default (strong reranker over 30 full chunks + rewrite v2) takes ~10 s, of which
-~7 s is reranking on the CPU; rewrite + search + answer take ~3 s, so the reranker's budget is ~2 s.
-`RERANK_MAX_WORDS` = words of each chunk the reranker reads (chunks are ~250 words; the LLM always gets the full chunk).
+| Part | Choice |
+|---|---|
+| LLM | `qwen3:8b` (4-bit) via Ollama |
+| Embeddings | `qwen3-embedding:0.6b`, 1024 dimensions, via Ollama |
+| Vector database | Qdrant 1.20 in Docker: dense, sparse (BM25) and multi-vector (ColBERT) collections |
+| Rerankers | fastembed (ONNX Runtime, CPU): `answerai-colbert-small-v1`, `bge-reranker-base` |
+| API | FastAPI |
+| Tooling | uv, pytest, GitHub Actions |
 
-Page-style dev (28 answerable):
+## Repository layout
 
-| Config | candidates | words read | hit@1 | hit@5 | all evidence @5 | rerank step | median latency |
-|---|---|---|---|---|---|---|---|
-| default | 30 | all | **96%** | 96% | **82%** | 7.0 s | 10.4 s |
-| `v2_cand15` | 15 | all | 96% | 96% | 75% | | 6.2 s |
-| `mw150_c30` | 30 | 150 | 86% | 96% | 68% | 4.0 s | 6.7 s |
-| `mw100_c30` | 30 | 100 | 86% | 93% | 46% | 2.7 s | 5.3 s |
-| `mw150_c15` | 15 | 150 | 86% | 96% | 61% | 1.7 s | **4.8 s** |
-| `mw100_c15` | 15 | 100 | 82% | 96% | 54% | 1.2 s | **4.1 s** |
-| `week_rerank` (rewrite mode 3, no LLM expansion) | 30 | all | 96% | 100% | 82% | | 10.5 s |
-
-Student-style dev, now 19 questions (17 answerable; two date questions added, so not comparable with earlier student rows):
-
-| Config | candidates | words read | hit@1 | hit@5 | all evidence @5 | median latency |
-|---|---|---|---|---|---|---|
-| default | 30 | all | 41% | **71%** | 29% | 8.9 s |
-| `mw150_c30` | 30 | 150 | 41% | 71% | 29% | 7.3 s |
-| `mw100_c30` | 30 | 100 | 53% | 71% | 29% | 5.6 s |
-| `mw150_c15` | 15 | 150 | 24% | 53% | 29% | 4.6 s |
-| `mw100_c15` | 15 | 100 | 41% | 59% | 29% | 4.3 s |
-
-Findings:
-- **The reranker needs the whole chunk.** Reading only the first 100-150 words, it misses answers that sit further down:
-  page-style all evidence drops from 82% to 46-68%. The configs under 5 s give back 4 to 8 page questions of the
-  reranking gain (and 2-3 student questions).
-- **Fewer candidates costs less than shorter input**: 15 full chunks lose 2 page questions of evidence at 6.2 s.
-- **Rewrite mode 3 (week phrase only, no LLM)** saves no time (the expansion call is ~0.3 s) and, on the earlier 17-question
-  student set, dropped hit@5 from 73% to 53%: rejected. The LLM expansion carries v2's gain, not the week phrase alone.
-- **Conclusion:** no free setting reaches 5 s without losing much of the gain. Defaults stay as they are; next is making
-  the full-length reranker itself faster (int8 quantization) or moving its work to indexing time (late interaction / ColBERT).
-
-### Speed-up round 2: int8 cross-encoder and ColBERT
-
-Two ways to keep the reranker reading the whole chunk and still be fast:
-- **int8**: the same cross-encoder with its weights stored as 8-bit integers (dynamic quantization, 1.1 GB -> 0.28 GB).
-  On this CPU (AVX-512 VNNI) it reranks 30 chunks in 2.9 s instead of 5.8 s, with the same top-1 on 9 of 10 checks.
-- **ColBERT** (`answerai-colbert-small-v1`, late interaction): every chunk's word-piece vectors are computed once at
-  indexing time (5 min, own Qdrant collection); at query time only the question is encoded and Qdrant scores the
-  candidates with MaxSim. 0.25 s for 30 or 100 candidates.
-
-| Set | Config | hit@1 | hit@5 | all evidence @5 | rerank step | median latency |
-|---|---|---|---|---|---|---|
-| page | default (cross-encoder, 30) | 96% | 96% | 82% | 7.0 s | 10.4 s |
-| page | `int8_c30` | 89% | 96% | 82% | 2.9 s | 6.1 s |
-| page | `int8_c15` | **93%** | 96% | **75%** | 1.3 s | **4.1 s** |
-| page | `colbert_c30` | 86% | 96% | 71% | 0.2 s | **3.9 s** |
-| page | `colbert_c100` | 86% | 100% | 71% | 0.2 s | 4.4 s |
-| student | default | 41% | 71% | 29% | 5.7 s | 8.9 s |
-| student | `int8_c30` | 47% | 65% | 18% | 2.7 s | 6.0 s |
-| student | `int8_c15` | 41% | 59% | 29% | 1.2 s | **3.7 s** |
-| student | `colbert_c30` | 29% | **71%** | 24% | 0.2 s | 4.3 s |
-| student | `colbert_c100` | 35% | 65% | 24% | 0.2 s | 3.9 s |
-
-Findings:
-- Both get under 5 s while keeping most of the reranking gain (far better than shortening the input).
-- int8 is slightly better on page-style, ColBERT slightly better on student hit@5: 1-2 questions either way, within noise.
-- More ColBERT candidates (100 vs 30) do not help: what vector search misses in its top 30 it also misses lower down.
-  That points at recall, which is what keyword search (hybrid, next) adds.
-
-### Eval fixes: judge label parsing, half answers, list depth
-
-A code review of the eval found three bugs; each now has a test.
-- **Judge labels** were matched as substrings in the order CORRECT, PARTIAL, WRONG, so a reply "INCORRECT" or
-  "Partially correct" counted as CORRECT. Labels are now read as whole words.
-- **Half answers.** Every answer containing "I don't know" was graded WRONG without asking the judge, including answers
-  that give part of the answer and say "I don't know" about the rest. Now only a bare "I don't know" skips the judge.
-  "I don’t know" with a curly apostrophe is recognised too.
-- **List depth.** RRF lets a chunk ranked 12th in two lists beat one ranked 1st in a single list, so how deep the merged
-  lists are changes the top of the result. The app (5 chunks) merged shallower lists than the eval (10 chunks), so the
-  eval's top 5 was not always what the app gave the LLM (rewrite v2 or hybrid search without a reranker). Every merged
-  list is now 20 deep. Runs with a reranker already used deeper lists and are unaffected.
-
-All 52 saved runs were re-graded from their saved answers (`evals/rejudge.py`; no new search or generation). Retrieval
-numbers do not change. Out of ~1,100 graded answers 38 labels moved: 26 half answers from wrong to partial (the fix),
-and 12 flips between correct and partial in both directions. No answer went from correct to wrong, so the "INCORRECT"
-misreading never actually happened. The 12 flips show the local judge is **not fully repeatable** even at temperature 0:
-about 1 in 100 labels changes when the same answer is graded again. The tables above use the re-graded numbers; only the
-"wrong" column moved (by one or two questions), "correct" is unchanged in every row. Local vs Claude judge: 76% same
-label, kappa 0.57 (was 0.58).
-
-### Hybrid search: BM25 keyword search + vector search
-
-Vector search matches meaning and blurs exact rare words ("keras", "task 8", "Block B"). BM25 scores chunks that contain
-the question's words, weighting rare words most. Both lists are merged with RRF (`HYBRID=1`, own Qdrant collection with
-sparse vectors, built in 2 s). In hindsight this should have been the baseline *before* reranking, so the first rows
-measure it alone. Dev split; `v2` = query rewriting v2; rerankers get 30 candidates (int8: 15).
-
-Page-style dev, 28 answerable + 4 unanswerable (one question ≈ 3.6 points):
-
-| Reranker | Search | hit@1 | hit@5 | hit@10 | MRR@10 | all evidence @5 | @10 | correct | wrong | median latency |
-|---|---|---|---|---|---|---|---|---|---|---|
-| none | vector | 64% | 89% | 93% | 0.76 | 57% | 68% | 39% | 4% | 3.5 s |
-| none | vector + v2 | 64% | 93% | 93% | 0.76 | 54% | 68% | 39% | 7% | 3.9 s |
-| none | **hybrid** | **75%** | 93% | 96% | **0.84** | **71%** | 75% | 43% | 0% | 3.8 s |
-| none | hybrid + v2 | 71% | 96% | 96% | 0.83 | 68% | 79% | 43% | 0% | 3.8 s |
-| cross-encoder (+ v2) | vector | 96% | 96% | 96% | 0.96 | 82% | 82% | 61% | 0% | 10.4 s |
-| cross-encoder (+ v2) | hybrid | **96%** | **100%** | **100%** | **0.97** | **86%** | **86%** | **64%** | 0% | 9.5 s |
-| int8, 15 (+ v2) | vector | 93% | 96% | 96% | 0.95 | 75% | 75% | 54% | 0% | 4.1 s |
-| int8, 15 (+ v2) | hybrid | 93% | 100% | 100% | 0.96 | 71% | 82% | 61% | 0% | 5.0 s |
-| ColBERT (+ v2) | vector | 86% | 96% | 96% | 0.90 | 71% | 75% | 50% | 0% | 3.9 s |
-| ColBERT (+ v2) | hybrid | 86% | 100% | 100% | 0.92 | 71% | 79% | 54% | 0% | **3.7 s** |
-
-Student-style dev, on the 17 questions every run shares (15 answerable + 2 unanswerable; the two date questions were
-added after the vector-only runs; one question ≈ 6.7 points):
-
-| Reranker | Search | hit@1 | hit@5 | hit@10 | MRR@10 | all evidence @5 | @10 | correct | wrong | median latency |
-|---|---|---|---|---|---|---|---|---|---|---|
-| none | vector | 33% | 47% | 47% | 0.38 | 20% | 27% | 13% | 13% | 3.4 s |
-| none | vector + v2 | 33% | 53% | 67% | 0.43 | 27% | 33% | 13% | 7% | 4.0 s |
-| none | hybrid | 40% | 47% | 67% | 0.46 | 27% | 40% | 20% | 7% | 3.7 s |
-| none | hybrid + v2 | 40% | 60% | 73% | 0.52 | 27% | 33% | 20% | 7% | 3.9 s |
-| cross-encoder (+ v2) | vector | 40% | 73% | 80% | 0.55 | 33% | 40% | 13% | 0% | 9.0 s |
-| cross-encoder (+ v2) | hybrid | **53%** | **80%** | **87%** | **0.63** | **40%** | **53%** | 27% | 7% | 9.5 s |
-| int8, 15 (+ v2) | vector | 47% | 67% | 67% | 0.53 | 33% | 40% | 13% | 7% | 3.7 s |
-| int8, 15 (+ v2) | hybrid | 47% | 67% | 80% | 0.59 | 27% | 40% | 20% | 7% | 5.1 s |
-| ColBERT (+ v2) | vector | 33% | 73% | 80% | 0.48 | 27% | 40% | 20% | 0% | 4.0 s |
-| ColBERT (+ v2) | hybrid | 47% | 67% | 80% | 0.56 | 27% | 33% | 20% | 7% | **3.6 s** |
-
-Findings:
-- **Hybrid alone is the cheapest step so far.** Without any reranker, page-style hit@1 goes 64% → 75% (+3 questions) and
-  all evidence in the top 5 57% → 71% (+4), for +0.3 s. That is about a third of the cross-encoder's hit@1 gain at a
-  twentieth of its cost.
-- **On student questions hybrid mainly adds recall**: right page in the top 10 47% → 67% (+3), but the top 5 only
-  improves together with rewrite v2 (47% → 60%). Short questions have few keywords for BM25 to match.
-- **With a reranker on top, hybrid finds what vector search never does.** Page hit@10 reaches 100% under all three
-  rerankers (the same question missed it under every 30-candidate vector config; only 100 ColBERT candidates had found it). With the cross-encoder, student hit@5
-  goes 73% → 80% and all evidence @10 40% → 53%: the best retrieval measured so far, but at 9.5 s.
-- **Under 5 s, the configs differ by 1-2 questions** (noise). Hybrid + ColBERT is the fastest (3.6-3.7 s) and its
-  reranking work is done at indexing time, so it does not slow down as the candidate list grows.
-- **The price of the 5 s target**, against hybrid + cross-encoder: page hit@1 96% → 86% (-3 questions), all evidence @5
-  86% → 71% (-4), student hit@5 80% → 67% (-2). About 6 s per answer saved.
-
-Defaults decided: `HYBRID=1`, `RERANK_KIND=colbert` (30 candidates), rewrite v2 kept. The cross-encoder stays one switch
-away (`RERANK_KIND=cross`) for when quality matters more than speed.
+```text
+src/ragapp/
+├── ingest.py, chunking.py, cleaning.py   # indexing: load, clean, chunk, embed, store
+├── bm25.py, colbert.py                   # the two extra indexes
+├── student.py, rewrite.py                # who is asking and when; query expansion
+├── retrieve.py, rerank.py                # filter, hybrid search, RRF; rerankers
+├── generate.py, rag.py, api.py           # answer prompt; the whole pipeline; HTTP API
+└── config.py                             # every switch in one place
+evals/                                    # eval runner, re-grader, judge rubric, result summaries
+analysis/corpus_eda.py                    # corpus analysis that the cleaning rules come from
+tests/                                    # unit tests (no LLM, database or course data needed)
+phase0/                                   # warm-up exercises done before the project
+```
