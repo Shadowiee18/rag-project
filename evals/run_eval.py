@@ -18,6 +18,7 @@ import ollama
 
 from ragapp import config
 from ragapp.cleaning import clean
+from ragapp.colbert import load_colbert
 from ragapp.rerank import load_model
 from ragapp.documents import load_documents
 from ragapp.rag import answer as rag_answer
@@ -181,6 +182,7 @@ def summarise(results: list[dict], user_year_mode: str) -> dict:
             "collection": config.COLLECTION, "clean_corpus": config.CLEAN_CORPUS, "exclude_templates": config.EXCLUDE_TEMPLATES,
             "rerank_model": config.RERANK_MODEL, "rerank_candidates": config.RERANK_CANDIDATES if config.RERANK_MODEL else None,
             "rerank_max_words": config.RERANK_MAX_WORDS if config.RERANK_MODEL else None,
+            "rerank_kind": config.RERANK_KIND if config.RERANK_MODEL else None, "rerank_int8": config.RERANK_INT8,
         },
     }
 
@@ -206,8 +208,8 @@ def main() -> None:
         DUPLICATE_OF.update(clean(corpus).duplicate_of)
 
     RESULTS_DIR.mkdir(exist_ok=True)
-    if config.RERANK_MODEL:
-        load_model(config.RERANK_MODEL)  # load once before timing, so question 1 isn't charged for it
+    if config.RERANK_MODEL:  # load once before timing, so question 1 isn't charged for it
+        load_colbert() if config.RERANK_KIND == "colbert" else load_model(config.RERANK_MODEL)
     results = []
     for number, item in enumerate(items, start=1):
         results.append(evaluate_one(item, student_for(item, args.user_year, page_years)))

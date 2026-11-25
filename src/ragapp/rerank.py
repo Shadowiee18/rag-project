@@ -7,14 +7,23 @@ So: vector search picks RERANK_CANDIDATES chunks, the cross-encoder re-sorts onl
 """
 
 from functools import lru_cache
+from pathlib import Path
 
 from fastembed.rerank.cross_encoder import TextCrossEncoder
 
 from ragapp import config
+from ragapp.colbert import colbert_rerank
+
+
+def int8_dir(name: str) -> Path:
+    """Where `python -m ragapp.quantize` writes the int8 copy of a reranker."""
+    return config.MODEL_CACHE / f"{name.replace('/', '--')}-int8"
 
 
 @lru_cache(maxsize=1)  # load the model once per process, not once per question
 def load_model(name: str) -> TextCrossEncoder:
+    if config.RERANK_INT8:
+        return TextCrossEncoder(name, cache_dir=str(config.MODEL_CACHE), specific_model_path=str(int8_dir(name)))
     return TextCrossEncoder(name, cache_dir=str(config.MODEL_CACHE))
 
 
@@ -29,6 +38,8 @@ def shorten(text: str) -> str:
 def rerank(question: str, chunks: list[dict]) -> list[dict]:
     """The same chunks, best first by cross-encoder score (which replaces the vector score).
     The LLM still gets the full chunk text; only the scoring reads the shortened version."""
+    if config.RERANK_KIND == "colbert":
+        return colbert_rerank(question, chunks)
     if not chunks:
         return []
     scores = list(load_model(config.RERANK_MODEL).rerank(question, [shorten(c["text"]) for c in chunks]))

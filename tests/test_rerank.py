@@ -82,3 +82,40 @@ def test_reranker_reads_only_the_first_words_but_returns_the_full_chunk(monkeypa
 def test_max_words_zero_reads_the_whole_chunk(monkeypatch):
     monkeypatch.setattr(config, "RERANK_MAX_WORDS", 0)
     assert rerank_module.shorten("a b c d") == "a b c d"
+
+
+def test_colbert_kind_reorders_by_the_scores_qdrant_returns(monkeypatch):
+    import numpy as np
+
+    import ragapp.colbert as colbert
+
+    class FakeColbert:
+        def query_embed(self, question):
+            yield np.zeros((3, 4))  # 3 question word pieces, 4 numbers each
+
+    class FakeClient:
+        def query_points(self, collection_name, query, query_filter, limit):
+            assert collection_name == config.COLBERT_COLLECTION
+            assert sorted(query_filter.must[0].has_id) == [10, 11, 12]  # only the candidates are scored
+            point = lambda i, s: type("P", (), {"id": i, "score": s})()  # noqa: E731
+            return type("R", (), {"points": [point(12, 9.0), point(10, 5.0), point(11, 1.0)]})()
+
+    monkeypatch.setattr(config, "RERANK_KIND", "colbert")
+    monkeypatch.setattr(colbert, "load_colbert", lambda: FakeColbert())
+    monkeypatch.setattr(colbert, "get_client", lambda: FakeClient())
+    chunks = [{**chunk(i, "t"), "point_id": 10 + i} for i in range(3)]
+    ranked = rerank_module.rerank("q", chunks)
+    assert [c["point_id"] for c in ranked] == [12, 10, 11]
+    assert ranked[0]["score"] == 9.0
+
+
+def test_int8_loads_the_quantized_copy(monkeypatch):
+    seen = {}
+    monkeypatch.setattr(config, "RERANK_INT8", True)
+    monkeypatch.setattr(rerank_module, "TextCrossEncoder", lambda name, **kw: seen.update(kw) or "model")
+    rerank_module.load_model.cache_clear()
+    try:
+        rerank_module.load_model("org/name")
+    finally:
+        rerank_module.load_model.cache_clear()
+    assert seen["specific_model_path"].endswith("org--name-int8")

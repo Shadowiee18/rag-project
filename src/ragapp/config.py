@@ -51,5 +51,12 @@ RERANK_MODEL = os.getenv("RERANK_MODEL", "BAAI/bge-reranker-base")
 RERANK_CANDIDATES = int(os.getenv("RERANK_CANDIDATES", "30"))
 # Words of each chunk the reranker reads (0 = the whole chunk, ~250-300 words). Fewer = faster reranking.
 RERANK_MAX_WORDS = int(os.getenv("RERANK_MAX_WORDS", "0"))
+# Use the int8 copy of the reranker made by `python -m ragapp.quantize` (faster on CPU).
+RERANK_INT8 = os.getenv("RERANK_INT8", "0") == "1"
+# Which reranker: "cross" (cross-encoder RERANK_MODEL) | "colbert" (late interaction scored inside Qdrant,
+# needs `python -m ragapp.colbert` once after every ingest; see colbert.py).
+RERANK_KIND = os.getenv("RERANK_KIND", "cross")
+COLBERT_MODEL = "answerdotai/answerai-colbert-small-v1"  # 0.13 GB, 96 numbers per word piece
+COLBERT_COLLECTION = f"{COLLECTION}_colbert"
 # Downloaded model files (git-ignored). fastembed's default is the temp folder, which Windows cleans up.
 MODEL_CACHE = PROJECT_ROOT / "models"

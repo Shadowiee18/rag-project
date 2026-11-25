@@ -47,7 +47,7 @@ def build_filter(year: str | None, blocks: list[str] | None) -> Filter | None:
 def search(
     client: QdrantClient, query_vector: list[float], k: int, year: str | None = None, blocks: list[str] | None = None
 ) -> list[dict]:
-    """Return the k closest chunks as dicts: the stored payload plus a 'score'."""
+    """Return the k closest chunks as dicts: the stored payload plus a 'score' and the Qdrant 'point_id'."""
     result = client.query_points(
         collection_name=config.COLLECTION,
         query=query_vector,
@@ -55,4 +55,4 @@ def search(
         limit=k,
         with_payload=True,
     )
-    return [{**point.payload, "score": point.score} for point in result.points]
+    return [{**point.payload, "score": point.score, "point_id": point.id} for point in result.points]
