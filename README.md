@@ -53,13 +53,13 @@ same split, among many runs on 28 questions.
 flowchart LR
     subgraph Indexing
         P[Course pages<br/>JSONL] --> C[Cleaning<br/>dedupe, drop near-empty,<br/>tag templates]
-        C --> K[1500-char chunks<br/>+ 'Year · Block · title' header]
+        C --> K[1500-char chunks<br/>+ metadata in the text:<br/>'Year · Block · title']
         K --> D[(Dense vectors<br/>qwen3-embedding)]
         K --> B[(BM25 sparse<br/>vectors)]
         K --> L[(ColBERT token<br/>vectors)]
     end
     subgraph Query
-        Q[Question<br/>+ year, block, date] --> F[Year/block filter]
+        Q[Question<br/>+ year, block, date] --> F[Metadata filter<br/>year/block]
         F --> R[Query expansion<br/>+ current block week]
         R --> H[Vector + BM25 search<br/>per query, merged with RRF]
         H --> X[ColBERT rerank<br/>30 → 5 chunks]
@@ -72,8 +72,8 @@ flowchart LR
 
 | Step | What it does | Why (measured on the dev split) |
 |---|---|---|
-| Chunk headers | Every chunk starts with "Year 2 · Block B · page title" before embedding | Each block has look-alike pages (deadlines, DataLab); right page first 59% → 63% |
-| Year/block filter | Searches only the year/block the question names, else the student's own, plus shared pages | Right page in top 5 87% → 93% |
+| Metadata enrichment | Each chunk's metadata is written into its text before embedding ("Year 2 · Block B · page title", a contextual chunk header), so the vector also says where the chunk comes from | Each block has look-alike pages (deadlines, DataLab); right page first 59% → 63% |
+| Metadata filtering | The same year/block metadata is stored next to each chunk in Qdrant; search is restricted to the year/block the question names, else the student's own, plus shared pages | Right page in top 5 87% → 93% |
 | Corpus cleaning | Rules from a corpus-only EDA: merge exact duplicates, drop near-empty pages, keep templates out of search | No retrieval change; fewer junk chunks in the context |
 | Query expansion (v2) | The LLM adds synonyms; code (not the LLM) adds the student's current week to time questions; all queries searched and merged | Within noise alone; with a reranker, student top 5 47% → 73% |
 | Hybrid search | BM25 keyword search next to vector search, merged with reciprocal rank fusion | Alone: right page first 64% → 75%, all evidence 57% → 71%, for +0.3 s |
