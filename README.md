@@ -225,3 +225,19 @@ Findings:
 - **Latency is the price:** about 10 s per answer with the base model, against 3.5 s now.
 - Caveat: the correct/wrong columns use the local judge, whose label parsing has a known bug (a reply containing
   "INCORRECT" counts as CORRECT); retrieval columns are exact.
+
+### Known gap: questions about dates ("tomorrow", "next")
+
+Tried by hand with the default system (rerank + v2), as a Year 2 Block B student on a Wednesday:
+- **"do i have any lectures tomorrow"** → "no", for the wrong reason: it missed the block schedule and cited an *undated*
+  lecture from another course page, giving it today's date. A made-up fact with a citation.
+- **"when is the next lecture we have"** → it found the block schedule, then picked an entry from two days earlier.
+
+Two separate failures:
+1. **Retrieval:** the schedule is one long page split into ~13 chunks; the right day's entry competes with look-alike pages.
+2. **Date reasoning:** an 8B model compares dates unreliably, even with today's date in the prompt.
+
+Prompting won't fix date arithmetic, so the plan is code: a schedule tool (Phase 3, agent layer) that reads the dated entries
+of the student's block page and keeps those from today onwards; the LLM only phrases the answer.
+Both questions are now in the student-style set (dev split, since they were seen failing first), so the fix can be measured.
+From here on student-style dev has 19 questions instead of 17: earlier student-dev rows are not directly comparable with new runs.
