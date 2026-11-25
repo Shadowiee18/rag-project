@@ -41,6 +41,8 @@ Does the chatbot answer contain the key information of the reference answer, wit
 Reply with exactly one word: CORRECT, PARTIAL or WRONG."""
 
 
+# 2: whole-word judge labels, half answers judged (see grade). rejudge.py re-grades older saved runs.
+JUDGE_RULES = 2
 REFUSAL = re.compile(r"\bi (?:don't|do not) know\b")
 # Whole words only: "INCORRECT" contains "CORRECT" but means WRONG.
 JUDGE_LABEL = re.compile(r"\b(CORRECT|INCORRECT|PARTIAL|PARTIALLY|WRONG)\b")
@@ -83,6 +85,13 @@ def judge(question: str, expected: str, answer: str) -> str:
     if not match:
         return "WRONG"
     return LABEL_MEANS.get(match.group(1), match.group(1))
+
+
+def grade(result: dict) -> str:
+    """A bare "I don't know" is wrong without asking; half an answer goes to the judge, which can say PARTIAL."""
+    if only_refusal(result["answer"]):
+        return "WRONG"
+    return judge(result["question"], result["expected_answer"], result["answer"])
 
 
 def simulated_user_year(item: dict, page_years: dict[str, str]) -> str:
@@ -137,8 +146,7 @@ def evaluate_one(item: dict, student: StudentContext | None = None) -> dict:
         result["hit_rank"] = first_hit_rank(doc_ids, sources)
         top_used = set(doc_ids[: config.TOP_K])
         result["all_sources_in_context"] = all(s in top_used for s in sources)
-        # A bare "I don't know" is wrong without asking; half an answer goes to the judge, which can say PARTIAL.
-        result["judge"] = "WRONG" if only_refusal(answer_text) else judge(item["question"], item["expected_answer"], answer_text)
+        result["judge"] = grade(result)
     return result
 
 
@@ -155,6 +163,23 @@ def evidence_summary(answerable: list[dict]) -> dict:
     }
 
 
+def answers_summary(results: list[dict]) -> dict:
+    """The answer-quality numbers of a run (the part a re-judge recomputes)."""
+    answerable = [r for r in results if r["source_ids"]]
+    unanswerable = [r for r in results if not r["source_ids"]]
+    judged = [r["judge"] for r in answerable]
+    return {
+        "answers (answerable, LLM-judged)": {
+            "correct": round(judged.count("CORRECT") / len(answerable), 3),
+            "partial": round(judged.count("PARTIAL") / len(answerable), 3),
+            "wrong": round(judged.count("WRONG") / len(answerable), 3),
+            "false_refusals": round(sum(r["refused"] for r in answerable) / len(answerable), 3),
+            "cites_sources": round(sum(r["cites"] for r in answerable) / len(answerable), 3),
+        },
+        "unanswerable_correctly_refused": round(sum(r["refused"] for r in unanswerable) / len(unanswerable), 3) if unanswerable else None,
+    }
+
+
 def summarise(results: list[dict], user_year_mode: str) -> dict:
     answerable = [r for r in results if r["source_ids"]]
     unanswerable = [r for r in results if not r["source_ids"]]
@@ -163,7 +188,6 @@ def summarise(results: list[dict], user_year_mode: str) -> dict:
     def hit_at(k: int) -> float:
         return round(sum(1 for rank in ranks if rank is not None and rank <= k) / len(answerable), 3)
 
-    judged = [r["judge"] for r in answerable]
     generate_times = [r["latency_s"]["generate"] for r in results]
     total_times = [sum(r["latency_s"].values()) for r in results]  # rewrite + retrieve + generate
     return {
@@ -179,14 +203,7 @@ def summarise(results: list[dict], user_year_mode: str) -> dict:
             "all_sources_in_context": round(sum(r["all_sources_in_context"] for r in answerable) / len(answerable), 3),
             **evidence_summary(answerable),
         },
-        "answers (answerable, LLM-judged)": {
-            "correct": round(judged.count("CORRECT") / len(answerable), 3),
-            "partial": round(judged.count("PARTIAL") / len(answerable), 3),
-            "wrong": round(judged.count("WRONG") / len(answerable), 3),
-            "false_refusals": round(sum(r["refused"] for r in answerable) / len(answerable), 3),
-            "cites_sources": round(sum(r["cites"] for r in answerable) / len(answerable), 3),
-        },
-        "unanswerable_correctly_refused": round(sum(r["refused"] for r in unanswerable) / len(unanswerable), 3) if unanswerable else None,
+        **answers_summary(results),
         "latency_s": {
             "generate_median": round(statistics.median(generate_times), 2),
             "total_median": round(statistics.median(total_times), 2),
@@ -201,7 +218,7 @@ def summarise(results: list[dict], user_year_mode: str) -> dict:
             "rerank_model": config.RERANK_MODEL, "rerank_candidates": config.RERANK_CANDIDATES if config.RERANK_MODEL else None,
             "rerank_max_words": config.RERANK_MAX_WORDS if config.RERANK_MODEL else None,
             "rerank_kind": config.RERANK_KIND if config.RERANK_MODEL else None, "rerank_int8": config.RERANK_INT8,
-            "hybrid": config.HYBRID,
+            "hybrid": config.HYBRID, "judge_rules": JUDGE_RULES,
         },
     }
 
