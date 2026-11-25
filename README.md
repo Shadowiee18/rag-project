@@ -279,3 +279,31 @@ Findings:
   student set, dropped hit@5 from 73% to 53%: rejected. The LLM expansion carries v2's gain, not the week phrase alone.
 - **Conclusion:** no free setting reaches 5 s without losing much of the gain. Defaults stay as they are; next is making
   the full-length reranker itself faster (int8 quantization) or moving its work to indexing time (late interaction / ColBERT).
+
+### Speed-up round 2: int8 cross-encoder and ColBERT
+
+Two ways to keep the reranker reading the whole chunk and still be fast:
+- **int8**: the same cross-encoder with its weights stored as 8-bit integers (dynamic quantization, 1.1 GB -> 0.28 GB).
+  On this CPU (AVX-512 VNNI) it reranks 30 chunks in 2.9 s instead of 5.8 s, with the same top-1 on 9 of 10 checks.
+- **ColBERT** (`answerai-colbert-small-v1`, late interaction): every chunk's word-piece vectors are computed once at
+  indexing time (5 min, own Qdrant collection); at query time only the question is encoded and Qdrant scores the
+  candidates with MaxSim. 0.25 s for 30 or 100 candidates.
+
+| Set | Config | hit@1 | hit@5 | all evidence @5 | rerank step | median latency |
+|---|---|---|---|---|---|---|
+| page | default (cross-encoder, 30) | 96% | 96% | 82% | 7.0 s | 10.4 s |
+| page | `int8_c30` | 89% | 96% | 82% | 2.9 s | 6.1 s |
+| page | `int8_c15` | **93%** | 96% | **75%** | 1.3 s | **4.1 s** |
+| page | `colbert_c30` | 86% | 96% | 71% | 0.2 s | **3.9 s** |
+| page | `colbert_c100` | 86% | 100% | 71% | 0.2 s | 4.4 s |
+| student | default | 41% | 71% | 29% | 5.7 s | 8.9 s |
+| student | `int8_c30` | 47% | 65% | 18% | 2.7 s | 6.0 s |
+| student | `int8_c15` | 41% | 59% | 29% | 1.2 s | **3.7 s** |
+| student | `colbert_c30` | 29% | **71%** | 24% | 0.2 s | 4.3 s |
+| student | `colbert_c100` | 35% | 65% | 24% | 0.2 s | 3.9 s |
+
+Findings:
+- Both get under 5 s while keeping most of the reranking gain (far better than shortening the input).
+- int8 is slightly better on page-style, ColBERT slightly better on student hit@5: 1-2 questions either way, within noise.
+- More ColBERT candidates (100 vs 30) do not help: what vector search misses in its top 30 it also misses lower down.
+  That points at recall, which is what keyword search (hybrid, next) adds.

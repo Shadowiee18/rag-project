@@ -1,0 +1,50 @@
+{
+  "questions": 19,
+  "answerable": 17,
+  "unanswerable": 2,
+  "retrieval": {
+    "hit@1": 0.353,
+    "hit@3": 0.471,
+    "hit@5 (what the LLM sees)": 0.647,
+    "hit@10": 0.765,
+    "mrr@10": 0.466,
+    "all_sources_in_context": 0.529,
+    "evidence_found@5": 0.353,
+    "all_evidence_found@5": 0.235,
+    "evidence_found@10": 0.412
+  },
+  "answers (answerable, LLM-judged)": {
+    "correct": 0.176,
+    "partial": 0.706,
+    "wrong": 0.118,
+    "false_refusals": 0.0,
+    "cites_sources": 1.0
+  },
+  "unanswerable_correctly_refused": 1.0,
+  "latency_s": {
+    "generate_median": 2.99,
+    "total_median": 3.9,
+    "total_max": 6.07
+  },
+  "config": {
+    "embed_model": "qwen3-embedding:0.6b",
+    "llm_model": "qwen3:8b",
+    "chunk_size": 1500,
+    "chunk_overlap": 200,
+    "top_k": 5,
+    "chunk_headers": true,
+    "filter_by_question_year": true,
+    "query_rewrite": "2",
+    "user_year": "none",
+    "collection": "adsai_chunks_clean",
+    "clean_corpus": true,
+    "exclude_templates": true,
+    "rerank_model": "BAAI/bge-reranker-base",
+    "rerank_candidates": 100,
+    "rerank_max_words": 0,
+    "rerank_kind": "colbert",
+    "rerank_int8": false,
+    "split": "dev",
+    "golden": "golden_student.jsonl"
+  }
+}
