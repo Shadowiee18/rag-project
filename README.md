@@ -241,3 +241,41 @@ Prompting won't fix date arithmetic, so the plan is code: a schedule tool (Phase
 of the student's block page and keeps those from today onwards; the LLM only phrases the answer.
 Both questions are now in the student-style set (dev split, since they were seen failing first), so the fix can be measured.
 From here on student-style dev has 19 questions instead of 17: earlier student-dev rows are not directly comparable with new runs.
+
+### Speed-up round 1: fewer candidates, shorter reranker input
+
+Target: at most 5 s per answer. The default (strong reranker over 30 full chunks + rewrite v2) takes ~10 s, of which
+~7 s is reranking on the CPU; rewrite + search + answer take ~3 s, so the reranker's budget is ~2 s.
+`RERANK_MAX_WORDS` = words of each chunk the reranker reads (chunks are ~250 words; the LLM always gets the full chunk).
+
+Page-style dev (28 answerable):
+
+| Config | candidates | words read | hit@1 | hit@5 | all evidence @5 | rerank step | median latency |
+|---|---|---|---|---|---|---|---|
+| default | 30 | all | **96%** | 96% | **82%** | 7.0 s | 10.4 s |
+| `v2_cand15` | 15 | all | 96% | 96% | 75% | | 6.2 s |
+| `mw150_c30` | 30 | 150 | 86% | 96% | 68% | 4.0 s | 6.7 s |
+| `mw100_c30` | 30 | 100 | 86% | 93% | 46% | 2.7 s | 5.3 s |
+| `mw150_c15` | 15 | 150 | 86% | 96% | 61% | 1.7 s | **4.8 s** |
+| `mw100_c15` | 15 | 100 | 82% | 96% | 54% | 1.2 s | **4.1 s** |
+| `week_rerank` (rewrite mode 3, no LLM expansion) | 30 | all | 96% | 100% | 82% | | 10.5 s |
+
+Student-style dev, now 19 questions (17 answerable; two date questions added, so not comparable with earlier student rows):
+
+| Config | candidates | words read | hit@1 | hit@5 | all evidence @5 | median latency |
+|---|---|---|---|---|---|---|
+| default | 30 | all | 41% | **71%** | 29% | 8.9 s |
+| `mw150_c30` | 30 | 150 | 41% | 71% | 29% | 7.3 s |
+| `mw100_c30` | 30 | 100 | 53% | 71% | 29% | 5.6 s |
+| `mw150_c15` | 15 | 150 | 24% | 53% | 29% | 4.6 s |
+| `mw100_c15` | 15 | 100 | 41% | 59% | 29% | 4.3 s |
+
+Findings:
+- **The reranker needs the whole chunk.** Reading only the first 100-150 words, it misses answers that sit further down:
+  page-style all evidence drops from 82% to 46-68%. The configs under 5 s give back 4 to 8 page questions of the
+  reranking gain (and 2-3 student questions).
+- **Fewer candidates costs less than shorter input**: 15 full chunks lose 2 page questions of evidence at 6.2 s.
+- **Rewrite mode 3 (week phrase only, no LLM)** saves no time (the expansion call is ~0.3 s) and, on the earlier 17-question
+  student set, dropped hit@5 from 73% to 53%: rejected. The LLM expansion carries v2's gain, not the week phrase alone.
+- **Conclusion:** no free setting reaches 5 s without losing much of the gain. Defaults stay as they are; next is making
+  the full-length reranker itself faster (int8 quantization) or moving its work to indexing time (late interaction / ColBERT).
