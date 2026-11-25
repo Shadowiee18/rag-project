@@ -12,8 +12,8 @@
   },
   "answers (answerable, LLM-judged)": {
     "correct": 0.407,
-    "partial": 0.537,
-    "wrong": 0.056,
+    "partial": 0.574,
+    "wrong": 0.019,
     "false_refusals": 0.056,
     "cites_sources": 0.963
   },
@@ -31,6 +31,8 @@
     "top_k": 5,
     "chunk_headers": true,
     "filter_by_question_year": true,
-    "user_year": "none"
+    "user_year": "none",
+    "judge_rules": 2,
+    "rejudged_labels_changed": 2
   }
 }

@@ -93,10 +93,10 @@ Golden set: 62 questions (54 answerable, 8 unanswerable). Local `qwen3:8b` + `qw
 
 | Run | What changed | hit@1 | hit@5 | MRR@10 | all pages in context | correct* | wrong* | false "I don't know" | unanswerable refused |
 |---|---|---|---|---|---|---|---|---|---|
-| `baseline` | naive 1500-char chunks | 59% | 87% | 0.71 | 80% | 33% | 9% | 9% | 7/8 |
-| `exp1_headers` | + "Year 2 · Block B · title" header on every chunk | 63% | 87% | 0.73 | 80% | 39% | 7% | 7% | 7/8 |
-| `exp2b_filter` | + year/block filter read from the question | 67% | 93% | 0.77 | 87% | 41% | 6% | 4% | 6/8 |
-| `exp3b_user_year` | + student's own year when the question names none (simulated) | **70%** | **93%** | **0.80** | **87%** | **44%** | 6% | 4% | 7/8 |
+| `baseline` | naive 1500-char chunks | 59% | 87% | 0.71 | 80% | 33% | 7% | 9% | 7/8 |
+| `exp1_headers` | + "Year 2 · Block B · title" header on every chunk | 63% | 87% | 0.73 | 80% | 39% | 4% | 7% | 7/8 |
+| `exp2b_filter` | + year/block filter read from the question | 67% | 93% | 0.77 | 87% | 41% | 2% | 4% | 6/8 |
+| `exp3b_user_year` | + student's own year when the question names none (simulated) | **70%** | **93%** | **0.80** | **87%** | **44%** | 2% | 4% | 7/8 |
 
 \* judged by the same local model against the expected answer: treat as rough. Retrieval numbers are exact.
 With 54 answerable questions, one question ≈ 2 points.
@@ -129,7 +129,7 @@ Findings:
 - **A hub page.** One prompt-engineering page full of generic instructions ("your task is…") lands in the top 5 for
   20 of 31 student questions: it is vaguely similar to every short question.
 - **Judges.** Claude graded all 62 page-style answers blind with [judge_rubric.md](evals/judge_rubric.md) (v1.1).
-  The local judge agrees on 76% (Cohen's kappa 0.58): reliable when it says "correct", too harsh with "partial",
+  The local judge agrees on 76% (Cohen's kappa 0.57): reliable when it says "correct", too harsh with "partial",
   and it missed two wrong answers. Faithfulness (Claude): 84%. Citations pointing at the right chunk: 61%.
   No human checked the Claude grades.
 - **The eval set had two stale/incomplete answers** (a07 EU AI Act dates, which two course pages disagree on; b10 missing
@@ -142,7 +142,7 @@ An LLM (`qwen3:8b`) rewrote each question into a search query, given the student
 
 | Set | hit@5 without → with rewrite | wrong answers | false "I don't know" |
 |---|---|---|---|
-| page-style | 93% → **61%** | 6% → 13% | 4% → 11% |
+| page-style | 93% → **61%** | 2% → 7% | 4% → 11% |
 | student-style | 50% → 54% | 18% → 7% | 14% → 4% |
 
 The 8B model copied "Block B" from its prompt examples into 34 of 62 queries (even when the student context had no
@@ -164,10 +164,10 @@ Student-style: 15 answerable + 2 unanswerable (one question ≈ 6.7 points). Cor
 
 | Set | Config | hit@1 | hit@5 | MRR@10 | all evidence @5 | correct | wrong | false "I don't know" | unanswerable refused | median latency |
 |---|---|---|---|---|---|---|---|---|---|---|
-| page | `base` | 64% | 89% | 0.76 | 57% | 39% | 7% | 4% | 3/4 | 3.6 s |
-| page | `clean` | 64% | 89% | 0.76 | 57% | 39% | 7% | 4% | 4/4 | 3.5 s |
-| page | `v2` | 64% | 93% | 0.76 | 54% | 36% | 11% | 7% | 4/4 | 4.5 s |
-| page | `clean_v2` | 64% | 93% | 0.76 | 54% | 39% | 11% | 7% | 4/4 | 3.9 s |
+| page | `base` | 64% | 89% | 0.76 | 57% | 39% | 4% | 4% | 3/4 | 3.6 s |
+| page | `clean` | 64% | 89% | 0.76 | 57% | 39% | 4% | 4% | 4/4 | 3.5 s |
+| page | `v2` | 64% | 93% | 0.76 | 54% | 36% | 7% | 7% | 4/4 | 4.5 s |
+| page | `clean_v2` | 64% | 93% | 0.76 | 54% | 39% | 7% | 7% | 4/4 | 3.9 s |
 | student | `base` | 33% | 47% | 0.38 | 20% | 13% | 13% | 7% | 2/2 | 3.6 s |
 | student | `clean` | 33% | 47% | 0.38 | 20% | 13% | 13% | 7% | 2/2 | 3.5 s |
 | student | `v2` | 33% | 53% | 0.42 | 27% | 13% | 7% | 0% | 2/2 | 3.6 s |
@@ -184,7 +184,7 @@ Findings:
 - **Rewrite v2: a trade, not a win.** It helps short, vague student questions ("vpn?", "presentation how long",
   "next week" questions): student hit@5 47% → 53%, all evidence 20% → 27%, wrong 13% → 7%, each one question.
   It slightly hurts long, precise page-style questions: the expansion adds synonyms that pull in loosely related chunks,
-  and RRF pushes the exact answer chunk from rank 5 to 6 (all evidence 57% → 54%, wrong 7% → 11%). It adds an LLM call
+  and RRF pushes the exact answer chunk from rank 5 to 6 (all evidence 57% → 54%, wrong 4% → 7%). It adds an LLM call
   (+0.4 to 0.9 s median on page-style).
 - **Bug found in v2:** in 1 of 49 queries the model copied the prompt's example format ("question -> query") into its
   output. Not fixed yet (v2 is off); strip that pattern when v2 is revisited.
@@ -204,7 +204,7 @@ and the best 5 go to the LLM. Baseline is `clean` (the current default). Dev spl
 
 | Set | Config | hit@1 | hit@5 | MRR@10 | all evidence @5 | correct | wrong | unanswerable refused | median latency |
 |---|---|---|---|---|---|---|---|---|---|
-| page | `clean` | 64% | 89% | 0.76 | 57% | 39% | 7% | 4/4 | 3.5 s |
+| page | `clean` | 64% | 89% | 0.76 | 57% | 39% | 4% | 4/4 | 3.5 s |
 | page | `rerank_small` (MiniLM-L6, 0.08 GB) | 82% | 96% | 0.89 | 68% | 54% | 0% | 4/4 | 4.1 s |
 | page | `rerank_base` (bge-reranker-base, 1.04 GB) | **96%** | **100%** | **0.97** | **82%** | **64%** | 0% | 4/4 | 9.8 s |
 | page | `v2_rerank_base` (+ rewrite v2) | 96% | 96% | 0.96 | 82% | 61% | 0% | 3/4 | 10.4 s |
@@ -223,8 +223,8 @@ Findings:
   week that the code adds to the query. Without a reranker those candidates landed just outside the top 5.
   On page-style it costs one question of hit@5 and one unanswerable refusal.
 - **Latency is the price:** about 10 s per answer with the base model, against 3.5 s now.
-- Caveat: the correct/wrong columns use the local judge, whose label parsing has a known bug (a reply containing
-  "INCORRECT" counts as CORRECT); retrieval columns are exact.
+- Correct/wrong are local-judge labels; retrieval columns are exact. (All runs were re-graded after two judge fixes,
+  see "Eval fixes" below.)
 
 ### Known gap: questions about dates ("tomorrow", "next")
 
@@ -307,3 +307,24 @@ Findings:
 - int8 is slightly better on page-style, ColBERT slightly better on student hit@5: 1-2 questions either way, within noise.
 - More ColBERT candidates (100 vs 30) do not help: what vector search misses in its top 30 it also misses lower down.
   That points at recall, which is what keyword search (hybrid, next) adds.
+
+### Eval fixes: judge label parsing, half answers, list depth
+
+A code review of the eval found three bugs; each now has a test.
+- **Judge labels** were matched as substrings in the order CORRECT, PARTIAL, WRONG, so a reply "INCORRECT" or
+  "Partially correct" counted as CORRECT. Labels are now read as whole words.
+- **Half answers.** Every answer containing "I don't know" was graded WRONG without asking the judge, including answers
+  that give part of the answer and say "I don't know" about the rest. Now only a bare "I don't know" skips the judge.
+  "I don’t know" with a curly apostrophe is recognised too.
+- **List depth.** RRF lets a chunk ranked 12th in two lists beat one ranked 1st in a single list, so how deep the merged
+  lists are changes the top of the result. The app (5 chunks) merged shallower lists than the eval (10 chunks), so the
+  eval's top 5 was not always what the app gave the LLM (rewrite v2 or hybrid search without a reranker). Every merged
+  list is now 20 deep. Runs with a reranker already used deeper lists and are unaffected.
+
+All 52 saved runs were re-graded from their saved answers (`evals/rejudge.py`; no new search or generation). Retrieval
+numbers do not change. Out of ~1,100 graded answers 38 labels moved: 26 half answers from wrong to partial (the fix),
+and 12 flips between correct and partial in both directions. No answer went from correct to wrong, so the "INCORRECT"
+misreading never actually happened. The 12 flips show the local judge is **not fully repeatable** even at temperature 0:
+about 1 in 100 labels changes when the same answer is graded again. The tables above use the re-graded numbers; only the
+"wrong" column moved (by one or two questions), "correct" is unchanged in every row. Local vs Claude judge: 76% same
+label, kappa 0.57 (was 0.58).

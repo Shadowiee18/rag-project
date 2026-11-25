@@ -15,8 +15,8 @@
   },
   "answers (answerable, LLM-judged)": {
     "correct": 0.393,
-    "partial": 0.536,
-    "wrong": 0.071,
+    "partial": 0.571,
+    "wrong": 0.036,
     "false_refusals": 0.036,
     "cites_sources": 0.964
   },
@@ -37,6 +37,8 @@
     "query_rewrite": false,
     "user_year": "simulated",
     "split": "dev",
-    "golden": "golden_set.jsonl"
+    "golden": "golden_set.jsonl",
+    "judge_rules": 2,
+    "rejudged_labels_changed": 1
   }
 }

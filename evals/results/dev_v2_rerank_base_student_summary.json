@@ -42,6 +42,8 @@
     "rerank_model": "BAAI/bge-reranker-base",
     "rerank_candidates": 30,
     "split": "dev",
-    "golden": "golden_student.jsonl"
+    "golden": "golden_student.jsonl",
+    "judge_rules": 2,
+    "rejudged_labels_changed": 0
   }
 }

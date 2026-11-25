@@ -42,6 +42,8 @@
     "rerank_model": "Xenova/ms-marco-MiniLM-L-6-v2",
     "rerank_candidates": 30,
     "split": "dev",
-    "golden": "golden_set.jsonl"
+    "golden": "golden_set.jsonl",
+    "judge_rules": 2,
+    "rejudged_labels_changed": 0
   }
 }
