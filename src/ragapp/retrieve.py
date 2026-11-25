@@ -3,6 +3,7 @@
 import re
 
 from ragapp import config
+from ragapp.bm25 import bm25_search
 from ragapp.embed import embed
 from ragapp.store import get_client, search
 
@@ -52,10 +53,18 @@ def retrieve(
     used only when the question names no year itself. Pages with no year/block always stay searchable."""
     year, blocks = filter_for(question, user_year, user_block)
     query_vector = embed([question])[0]
-    return search(get_client(), query_vector, k, year=year, blocks=blocks)
+    if not config.HYBRID:
+        return search(get_client(), query_vector, k, year=year, blocks=blocks)
+    depth = max(k, FUSION_DEPTH)
+    dense = search(get_client(), query_vector, depth, year=year, blocks=blocks)
+    return rrf_merge([dense, bm25_search(question, depth, year, blocks)], k)  # meaning + exact words
 
 
 RRF_K = 60  # the usual constant: dampens how much rank 1 beats rank 2
+# How deep every list fused with RRF is, whatever k is. A chunk ranked 12th in two lists beats one ranked 1st in
+# one list, so a deeper list can change the TOP of the fused result. A fixed depth keeps the app's top 5 (k=5)
+# equal to the first 5 of the eval's top 10 (k=10).
+FUSION_DEPTH = 20
 
 
 def rrf_merge(result_lists: list[list[dict]], k: int) -> list[dict]:
@@ -75,8 +84,12 @@ def retrieve_many(
     queries: list[str], k: int, question: str, user_year: str | None = None, user_block: str | None = None
 ) -> list[dict]:
     """Search with several queries and merge with RRF. The filter is decided from the ORIGINAL question,
-    so a rewrite can't change which block is searched."""
+    so a rewrite can't change which block is searched. With HYBRID, every query also gets a BM25 search."""
     year, blocks = filter_for(question, user_year, user_block)
     client = get_client()
     vectors = embed(queries)  # one batch call for all queries
-    return rrf_merge([search(client, v, 2 * k, year=year, blocks=blocks) for v in vectors], k)
+    depth = max(2 * k, FUSION_DEPTH)
+    lists = [search(client, v, depth, year=year, blocks=blocks) for v in vectors]
+    if config.HYBRID:
+        lists += [bm25_search(q, depth, year, blocks) for q in queries]
+    return rrf_merge(lists, k)

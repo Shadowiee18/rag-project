@@ -1,6 +1,14 @@
+import pytest
+
 import ragapp.rag as rag
 import ragapp.rerank as rerank_module
 from ragapp import config
+
+
+@pytest.fixture(autouse=True)
+def cross_encoder_kind(monkeypatch):
+    """These tests are about the cross-encoder path; the ColBERT test switches the kind itself."""
+    monkeypatch.setattr(config, "RERANK_KIND", "cross")
 
 
 class FakeCrossEncoder:

@@ -45,6 +45,8 @@
     "rerank_kind": "colbert",
     "rerank_int8": false,
     "split": "dev",
-    "golden": "golden_set.jsonl"
+    "golden": "golden_set.jsonl",
+    "judge_rules": 2,
+    "rejudged_labels_changed": 0
   }
 }

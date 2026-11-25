@@ -4,13 +4,14 @@ import ragapp.rewrite as rewrite
 from ragapp.generate import build_prompt
 from ragapp.student import find_week, nearest_year
 
+# An invented timeline in the same format as a block page (not real course data).
 TIMELINE = """## Project Timeline
 
-Week | Self-Study | DataLab Task
-W3 23.11–27.11 | Computer Vision | Tasks 4-5
-W6 14.12–18.12 | Robotics & RL | All Tasks
+Week | Self-Study | Project Task
+W2 16.11–20.11 | Topic Alpha | Tasks 1-2
+W5 07.12–11.12 | Topic Beta | All Tasks
 x-mas |  |
-W7 04.01–08.01 | N.A. | All Tasks
+W6 11.01–15.01 | N.A. | All Tasks
 """
 
 
@@ -20,13 +21,13 @@ def test_nearest_year_handles_new_year():
 
 
 def test_find_week_inside_a_week():
-    week = find_week(TIMELINE, date(2026, 11, 24))
-    assert week["week"] == 3
-    assert week["plan"] == "Computer Vision | Tasks 4-5"
+    week = find_week(TIMELINE, date(2026, 11, 18))
+    assert week["week"] == 2
+    assert week["plan"] == "Topic Alpha | Tasks 1-2"
 
 
 def test_find_week_after_new_year():
-    assert find_week(TIMELINE, date(2027, 1, 6))["week"] == 7
+    assert find_week(TIMELINE, date(2027, 1, 13))["week"] == 6
 
 
 def test_find_week_in_holiday_gap_is_none():

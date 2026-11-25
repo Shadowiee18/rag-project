@@ -12,8 +12,8 @@
   },
   "answers (answerable, LLM-judged)": {
     "correct": 0.333,
-    "partial": 0.574,
-    "wrong": 0.093,
+    "partial": 0.593,
+    "wrong": 0.074,
     "false_refusals": 0.093,
     "cites_sources": 0.907
   },
@@ -28,6 +28,8 @@
     "llm_model": "qwen3:8b",
     "chunk_size": 1500,
     "chunk_overlap": 200,
-    "top_k": 5
+    "top_k": 5,
+    "judge_rules": 2,
+    "rejudged_labels_changed": 1
   }
 }

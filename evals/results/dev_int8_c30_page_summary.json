@@ -14,8 +14,8 @@
     "evidence_found@10": 0.917
   },
   "answers (answerable, LLM-judged)": {
-    "correct": 0.571,
-    "partial": 0.429,
+    "correct": 0.536,
+    "partial": 0.464,
     "wrong": 0.0,
     "false_refusals": 0.0,
     "cites_sources": 1.0
@@ -43,6 +43,8 @@
     "rerank_candidates": 30,
     "rerank_max_words": 0,
     "split": "dev",
-    "golden": "golden_set.jsonl"
+    "golden": "golden_set.jsonl",
+    "judge_rules": 2,
+    "rejudged_labels_changed": 1
   }
 }

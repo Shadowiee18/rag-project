@@ -7,10 +7,10 @@ data/raw/*
 !data/raw/.gitkeep
 
 # Built from login-protected course material: keep out of the (public) repo.
-evals/golden_set.jsonl
+evals/golden*.jsonl
+!evals/golden_set.example.jsonl
 evals/drafts/
 evals/results/*.jsonl
-evals/golden_student.jsonl
 
 # Corpus analysis output names course pages
 analysis/output/

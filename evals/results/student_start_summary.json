@@ -34,6 +34,8 @@
     "top_k": 5,
     "chunk_headers": true,
     "filter_by_question_year": true,
-    "user_year": "none"
+    "user_year": "none",
+    "judge_rules": 2,
+    "rejudged_labels_changed": 0
   }
 }
