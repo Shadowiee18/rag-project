@@ -53,13 +53,18 @@ def retrieve(
     used only when the question names no year itself. Pages with no year/block always stay searchable."""
     year, blocks = filter_for(question, user_year, user_block)
     query_vector = embed([question])[0]
-    dense = search(get_client(), query_vector, k, year=year, blocks=blocks)
     if not config.HYBRID:
-        return dense
-    return rrf_merge([dense, bm25_search(question, k, year, blocks)], k)  # meaning + exact words
+        return search(get_client(), query_vector, k, year=year, blocks=blocks)
+    depth = max(k, FUSION_DEPTH)
+    dense = search(get_client(), query_vector, depth, year=year, blocks=blocks)
+    return rrf_merge([dense, bm25_search(question, depth, year, blocks)], k)  # meaning + exact words
 
 
 RRF_K = 60  # the usual constant: dampens how much rank 1 beats rank 2
+# How deep every list fused with RRF is, whatever k is. A chunk ranked 12th in two lists beats one ranked 1st in
+# one list, so a deeper list can change the TOP of the fused result. A fixed depth keeps the app's top 5 (k=5)
+# equal to the first 5 of the eval's top 10 (k=10).
+FUSION_DEPTH = 20
 
 
 def rrf_merge(result_lists: list[list[dict]], k: int) -> list[dict]:
@@ -83,7 +88,8 @@ def retrieve_many(
     year, blocks = filter_for(question, user_year, user_block)
     client = get_client()
     vectors = embed(queries)  # one batch call for all queries
-    lists = [search(client, v, 2 * k, year=year, blocks=blocks) for v in vectors]
+    depth = max(2 * k, FUSION_DEPTH)
+    lists = [search(client, v, depth, year=year, blocks=blocks) for v in vectors]
     if config.HYBRID:
-        lists += [bm25_search(q, 2 * k, year, blocks) for q in queries]
+        lists += [bm25_search(q, depth, year, blocks) for q in queries]
     return rrf_merge(lists, k)

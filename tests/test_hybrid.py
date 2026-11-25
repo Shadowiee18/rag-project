@@ -47,6 +47,32 @@ def test_hybrid_runs_bm25_for_every_rewritten_query(monkeypatch):
     assert [q for q, _, _ in seen] == ["is llm allowed", "is generative AI allowed"]
 
 
+def ranked_lists_sharing_one_deep_chunk(depth_rank):
+    """Dense and BM25 lists with different chunks, except 'X' at the same deep rank in both.
+    Fused, X (found twice) beats every chunk found once, but only if the lists are deep enough to contain it."""
+    dense = [f"d{i}" for i in range(1, 30)]
+    keyword = [f"k{i}" for i in range(1, 30)]
+    dense[depth_rank - 1] = keyword[depth_rank - 1] = "X"
+    return dense, keyword
+
+
+def test_hybrid_top_chunks_do_not_depend_on_how_many_are_asked_for(monkeypatch):
+    """The app asks for 5 chunks, the eval for 10: the eval's first 5 must be what the app gives the LLM."""
+    fake_search_setup(monkeypatch, *ranked_lists_sharing_one_deep_chunk(7), [])
+    monkeypatch.setattr(config, "HYBRID", True)
+    app = [c["doc_id"] for c in retrieve.retrieve("q", k=5)]
+    evaluation = [c["doc_id"] for c in retrieve.retrieve("q", k=10)]
+    assert app == evaluation[:5]
+
+
+def test_multi_query_top_chunks_do_not_depend_on_how_many_are_asked_for(monkeypatch):
+    fake_search_setup(monkeypatch, *ranked_lists_sharing_one_deep_chunk(12), [])
+    monkeypatch.setattr(config, "HYBRID", True)
+    app = [c["doc_id"] for c in retrieve.retrieve_many(["q", "q2"], 5, "q")]
+    evaluation = [c["doc_id"] for c in retrieve.retrieve_many(["q", "q2"], 10, "q")]
+    assert app == evaluation[:5]
+
+
 def test_bm25_search_with_only_stopwords_returns_nothing(monkeypatch):
     class EmptyQuery:
         indices = np.array([], dtype=int)
