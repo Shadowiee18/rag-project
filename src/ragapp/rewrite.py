@@ -130,3 +130,14 @@ def search_queries(question: str, student: StudentContext | None) -> list[str]:
         if phrase:
             queries = [f"{phrase} {q}" for q in queries]
     return list(dict.fromkeys(queries))  # drop exact duplicates, keep order
+
+
+def week_queries(question: str, student: StudentContext | None) -> list[str]:
+    """QUERY_REWRITE=3, no LLM: the original question, plus a copy with the student's year/block/week for
+    time questions ("whats due this week" -> "Year 2 Block B week 3 whats due this week")."""
+    queries = [question]
+    if student and not any(year_block_in_question(question)) and TIME_WORDS.search(question):
+        phrase = search_phrase(student)
+        if phrase:
+            queries.append(f"{phrase} {question}")
+    return queries

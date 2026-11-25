@@ -49,3 +49,15 @@ def test_code_adds_student_week_only_for_time_questions(monkeypatch):
     assert rewrite.search_queries("keras backend", student) == ["keras backend", "keras backend expanded"]
     # names its own block: no student context added
     assert rewrite.search_queries("year 2 block a deadline", student)[0] == "year 2 block a deadline"
+
+
+def test_week_queries_add_a_week_tagged_copy_only_for_time_questions(monkeypatch):
+    monkeypatch.setattr(rewrite, "search_phrase", lambda ctx: "Year 2 Block B week 3")
+    student = StudentContext(today=date(2026, 11, 24), year="Year2", block="BlockB")
+    assert rewrite.week_queries("whats due this week", student) == [
+        "whats due this week",
+        "Year 2 Block B week 3 whats due this week",
+    ]
+    assert rewrite.week_queries("keras backend", student) == ["keras backend"]  # not about time
+    assert rewrite.week_queries("deadline year 1 block a", student) == ["deadline year 1 block a"]  # names its own block
+    assert rewrite.week_queries("whats due this week", None) == ["whats due this week"]  # nobody known

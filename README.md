@@ -196,3 +196,114 @@ Defaults decided:
 - `CLEAN_CORPUS=1` (and `COLLECTION` follows it: `adsai_chunks_clean`): no measurable cost, cleaner context, smaller index.
 - `QUERY_REWRITE=0`: v2's gains and losses are each about one question, and it costs an extra LLM call.
   Its failure mode (answer chunk just outside the top 5) is what a reranker fixes, so v2 is re-tested together with reranking.
+
+### Reranking: a cross-encoder re-sorts the top 30
+
+Vector search fetches 30 chunks; a cross-encoder (fastembed, ONNX on CPU) reads each one together with the question
+and the best 5 go to the LLM. Baseline is `clean` (the current default). Dev split only.
+
+| Set | Config | hit@1 | hit@5 | MRR@10 | all evidence @5 | correct | wrong | unanswerable refused | median latency |
+|---|---|---|---|---|---|---|---|---|---|
+| page | `clean` | 64% | 89% | 0.76 | 57% | 39% | 7% | 4/4 | 3.5 s |
+| page | `rerank_small` (MiniLM-L6, 0.08 GB) | 82% | 96% | 0.89 | 68% | 54% | 0% | 4/4 | 4.1 s |
+| page | `rerank_base` (bge-reranker-base, 1.04 GB) | **96%** | **100%** | **0.97** | **82%** | **64%** | 0% | 4/4 | 9.8 s |
+| page | `v2_rerank_base` (+ rewrite v2) | 96% | 96% | 0.96 | 82% | 61% | 0% | 3/4 | 10.4 s |
+| student | `clean` | 33% | 47% | 0.38 | 20% | 13% | 13% | 2/2 | 3.5 s |
+| student | `rerank_small` | 33% | 47% | 0.39 | 27% | 20% | 0% | 2/2 | 4.0 s |
+| student | `rerank_base` | 27% | 53% | 0.37 | 33% | 20% | 7% | 2/2 | 10.2 s |
+| student | `v2_rerank_base` (+ rewrite v2) | **40%** | **73%** | **0.55** | 33% | 20% | 0% | 2/2 | 10.6 s |
+
+Findings:
+- **First clear win of Phase 2.** On page-style, `rerank_base` puts the right page first for 9 more questions and loses none;
+  all answer evidence reaches the LLM for 7 more, losing none. Far beyond the one-question noise floor.
+- **Size matters.** The small model gets about half of that gain at +0.6 s; the base model all of it at +6.5 s per question
+  (CPU, 30 chunks of ~400 tokens).
+- **Rewrite v2 pays off only with a reranker.** Its extra queries add candidates, and the reranker sorts them. On student
+  questions hit@5 goes 47% → 73% (+4 questions), mostly "this week / next week" questions found through the student's
+  week that the code adds to the query. Without a reranker those candidates landed just outside the top 5.
+  On page-style it costs one question of hit@5 and one unanswerable refusal.
+- **Latency is the price:** about 10 s per answer with the base model, against 3.5 s now.
+- Caveat: the correct/wrong columns use the local judge, whose label parsing has a known bug (a reply containing
+  "INCORRECT" counts as CORRECT); retrieval columns are exact.
+
+### Known gap: questions about dates ("tomorrow", "next")
+
+Tried by hand with the default system (rerank + v2), as a Year 2 Block B student on a Wednesday:
+- **"do i have any lectures tomorrow"** → "no", for the wrong reason: it missed the block schedule and cited an *undated*
+  lecture from another course page, giving it today's date. A made-up fact with a citation.
+- **"when is the next lecture we have"** → it found the block schedule, then picked an entry from two days earlier.
+
+Two separate failures:
+1. **Retrieval:** the schedule is one long page split into ~13 chunks; the right day's entry competes with look-alike pages.
+2. **Date reasoning:** an 8B model compares dates unreliably, even with today's date in the prompt.
+
+Prompting won't fix date arithmetic, so the plan is code: a schedule tool (Phase 3, agent layer) that reads the dated entries
+of the student's block page and keeps those from today onwards; the LLM only phrases the answer.
+Both questions are now in the student-style set (dev split, since they were seen failing first), so the fix can be measured.
+From here on student-style dev has 19 questions instead of 17: earlier student-dev rows are not directly comparable with new runs.
+
+### Speed-up round 1: fewer candidates, shorter reranker input
+
+Target: at most 5 s per answer. The default (strong reranker over 30 full chunks + rewrite v2) takes ~10 s, of which
+~7 s is reranking on the CPU; rewrite + search + answer take ~3 s, so the reranker's budget is ~2 s.
+`RERANK_MAX_WORDS` = words of each chunk the reranker reads (chunks are ~250 words; the LLM always gets the full chunk).
+
+Page-style dev (28 answerable):
+
+| Config | candidates | words read | hit@1 | hit@5 | all evidence @5 | rerank step | median latency |
+|---|---|---|---|---|---|---|---|
+| default | 30 | all | **96%** | 96% | **82%** | 7.0 s | 10.4 s |
+| `v2_cand15` | 15 | all | 96% | 96% | 75% | | 6.2 s |
+| `mw150_c30` | 30 | 150 | 86% | 96% | 68% | 4.0 s | 6.7 s |
+| `mw100_c30` | 30 | 100 | 86% | 93% | 46% | 2.7 s | 5.3 s |
+| `mw150_c15` | 15 | 150 | 86% | 96% | 61% | 1.7 s | **4.8 s** |
+| `mw100_c15` | 15 | 100 | 82% | 96% | 54% | 1.2 s | **4.1 s** |
+| `week_rerank` (rewrite mode 3, no LLM expansion) | 30 | all | 96% | 100% | 82% | | 10.5 s |
+
+Student-style dev, now 19 questions (17 answerable; two date questions added, so not comparable with earlier student rows):
+
+| Config | candidates | words read | hit@1 | hit@5 | all evidence @5 | median latency |
+|---|---|---|---|---|---|---|
+| default | 30 | all | 41% | **71%** | 29% | 8.9 s |
+| `mw150_c30` | 30 | 150 | 41% | 71% | 29% | 7.3 s |
+| `mw100_c30` | 30 | 100 | 53% | 71% | 29% | 5.6 s |
+| `mw150_c15` | 15 | 150 | 24% | 53% | 29% | 4.6 s |
+| `mw100_c15` | 15 | 100 | 41% | 59% | 29% | 4.3 s |
+
+Findings:
+- **The reranker needs the whole chunk.** Reading only the first 100-150 words, it misses answers that sit further down:
+  page-style all evidence drops from 82% to 46-68%. The configs under 5 s give back 4 to 8 page questions of the
+  reranking gain (and 2-3 student questions).
+- **Fewer candidates costs less than shorter input**: 15 full chunks lose 2 page questions of evidence at 6.2 s.
+- **Rewrite mode 3 (week phrase only, no LLM)** saves no time (the expansion call is ~0.3 s) and, on the earlier 17-question
+  student set, dropped hit@5 from 73% to 53%: rejected. The LLM expansion carries v2's gain, not the week phrase alone.
+- **Conclusion:** no free setting reaches 5 s without losing much of the gain. Defaults stay as they are; next is making
+  the full-length reranker itself faster (int8 quantization) or moving its work to indexing time (late interaction / ColBERT).
+
+### Speed-up round 2: int8 cross-encoder and ColBERT
+
+Two ways to keep the reranker reading the whole chunk and still be fast:
+- **int8**: the same cross-encoder with its weights stored as 8-bit integers (dynamic quantization, 1.1 GB -> 0.28 GB).
+  On this CPU (AVX-512 VNNI) it reranks 30 chunks in 2.9 s instead of 5.8 s, with the same top-1 on 9 of 10 checks.
+- **ColBERT** (`answerai-colbert-small-v1`, late interaction): every chunk's word-piece vectors are computed once at
+  indexing time (5 min, own Qdrant collection); at query time only the question is encoded and Qdrant scores the
+  candidates with MaxSim. 0.25 s for 30 or 100 candidates.
+
+| Set | Config | hit@1 | hit@5 | all evidence @5 | rerank step | median latency |
+|---|---|---|---|---|---|---|
+| page | default (cross-encoder, 30) | 96% | 96% | 82% | 7.0 s | 10.4 s |
+| page | `int8_c30` | 89% | 96% | 82% | 2.9 s | 6.1 s |
+| page | `int8_c15` | **93%** | 96% | **75%** | 1.3 s | **4.1 s** |
+| page | `colbert_c30` | 86% | 96% | 71% | 0.2 s | **3.9 s** |
+| page | `colbert_c100` | 86% | 100% | 71% | 0.2 s | 4.4 s |
+| student | default | 41% | 71% | 29% | 5.7 s | 8.9 s |
+| student | `int8_c30` | 47% | 65% | 18% | 2.7 s | 6.0 s |
+| student | `int8_c15` | 41% | 59% | 29% | 1.2 s | **3.7 s** |
+| student | `colbert_c30` | 29% | **71%** | 24% | 0.2 s | 4.3 s |
+| student | `colbert_c100` | 35% | 65% | 24% | 0.2 s | 3.9 s |
+
+Findings:
+- Both get under 5 s while keeping most of the reranking gain (far better than shortening the input).
+- int8 is slightly better on page-style, ColBERT slightly better on student hit@5: 1-2 questions either way, within noise.
+- More ColBERT candidates (100 vs 30) do not help: what vector search misses in its top 30 it also misses lower down.
+  That points at recall, which is what keyword search (hybrid, next) adds.

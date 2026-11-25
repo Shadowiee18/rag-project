@@ -9,8 +9,9 @@ from datetime import date
 
 from ragapp import config
 from ragapp.generate import generate
+from ragapp.rerank import rerank
 from ragapp.retrieve import retrieve, retrieve_many
-from ragapp.rewrite import rewrite_query, search_queries
+from ragapp.rewrite import rewrite_query, search_queries, week_queries
 from ragapp.student import StudentContext, describe
 
 
@@ -20,19 +21,23 @@ def answer(
     """k: chunks the LLM sees. retrieve_k: retrieve more than that (the eval uses 10, to see where pages rank)."""
     started = time.perf_counter()
     n = max(k, retrieve_k or 0)
+    pool = max(n, config.RERANK_CANDIDATES) if config.RERANK_MODEL else n  # reranking needs candidates to sort
     user_year, user_block = (student.year, student.block) if student else (None, None)
-    if config.QUERY_REWRITE == "2":
-        queries = search_queries(question, student)
+    if config.QUERY_REWRITE in ("2", "3"):
+        queries = search_queries(question, student) if config.QUERY_REWRITE == "2" else week_queries(question, student)
         rewritten_at = time.perf_counter()
-        chunks = retrieve_many(queries, n, question, user_year, user_block)
+        chunks = retrieve_many(queries, pool, question, user_year, user_block)
     else:
         queries = [question]
         if config.QUERY_REWRITE == "1":
             queries = [rewrite_query(question, describe(student, with_plan=False) if student else "")]
         rewritten_at = time.perf_counter()
-        chunks = retrieve(queries[0], n, user_year=user_year, user_block=user_block)
+        chunks = retrieve(queries[0], pool, user_year=user_year, user_block=user_block)
     search_query = " || ".join(queries)
     retrieved_at = time.perf_counter()
+    if config.RERANK_MODEL:
+        chunks = rerank(question, chunks)[:n]  # the original question: what the student actually asked
+    reranked_at = time.perf_counter()
     text = generate(question, chunks[:k], describe(student) if student else "")
     finished = time.perf_counter()
     return {
@@ -47,7 +52,8 @@ def answer(
         "timing_s": {
             "rewrite": round(rewritten_at - started, 2),
             "retrieve": round(retrieved_at - rewritten_at, 2),
-            "generate": round(finished - retrieved_at, 2),
+            "rerank": round(reranked_at - retrieved_at, 2),
+            "generate": round(finished - reranked_at, 2),
         },
     }
 
