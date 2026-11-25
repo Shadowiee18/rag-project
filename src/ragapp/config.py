@@ -49,5 +49,7 @@ QUERY_REWRITE = os.getenv("QUERY_REWRITE", "2")
 # bge-reranker-base by default: page hit@1 64% -> 96% on dev. Costs ~6.5 s per question on CPU (30 candidates).
 RERANK_MODEL = os.getenv("RERANK_MODEL", "BAAI/bge-reranker-base")
 RERANK_CANDIDATES = int(os.getenv("RERANK_CANDIDATES", "30"))
+# Words of each chunk the reranker reads (0 = the whole chunk, ~250-300 words). Fewer = faster reranking.
+RERANK_MAX_WORDS = int(os.getenv("RERANK_MAX_WORDS", "0"))
 # Downloaded model files (git-ignored). fastembed's default is the temp folder, which Windows cleans up.
 MODEL_CACHE = PROJECT_ROOT / "models"

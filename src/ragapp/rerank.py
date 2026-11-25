@@ -18,10 +18,19 @@ def load_model(name: str) -> TextCrossEncoder:
     return TextCrossEncoder(name, cache_dir=str(config.MODEL_CACHE))
 
 
+def shorten(text: str) -> str:
+    """What the cross-encoder reads: the first RERANK_MAX_WORDS words (0 = all). Its cost grows with length,
+    so fewer words = faster. The chunk header ("Year 2 · Block B · title") is at the start, so it always stays."""
+    if not config.RERANK_MAX_WORDS:
+        return text
+    return " ".join(text.split()[: config.RERANK_MAX_WORDS])
+
+
 def rerank(question: str, chunks: list[dict]) -> list[dict]:
-    """The same chunks, best first by cross-encoder score (which replaces the vector score)."""
+    """The same chunks, best first by cross-encoder score (which replaces the vector score).
+    The LLM still gets the full chunk text; only the scoring reads the shortened version."""
     if not chunks:
         return []
-    scores = list(load_model(config.RERANK_MODEL).rerank(question, [c["text"] for c in chunks]))
+    scores = list(load_model(config.RERANK_MODEL).rerank(question, [shorten(c["text"]) for c in chunks]))
     order = sorted(range(len(chunks)), key=lambda i: -scores[i])
     return [{**chunks[i], "score": float(scores[i])} for i in order]

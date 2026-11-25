@@ -180,6 +180,7 @@ def summarise(results: list[dict], user_year_mode: str) -> dict:
             "query_rewrite": config.QUERY_REWRITE, "user_year": user_year_mode,
             "collection": config.COLLECTION, "clean_corpus": config.CLEAN_CORPUS, "exclude_templates": config.EXCLUDE_TEMPLATES,
             "rerank_model": config.RERANK_MODEL, "rerank_candidates": config.RERANK_CANDIDATES if config.RERANK_MODEL else None,
+            "rerank_max_words": config.RERANK_MAX_WORDS if config.RERANK_MODEL else None,
         },
     }
 

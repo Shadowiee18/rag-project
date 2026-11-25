@@ -62,3 +62,23 @@ def test_reranking_off_searches_only_what_is_needed_and_loads_no_model(monkeypat
     out = rag.answer("vpn", k=5, retrieve_k=10)
     assert seen["k"] == 10
     assert [c["doc_id"] for c in out["chunks"]] == [f"d{i}" for i in range(10)]  # vector order kept
+
+
+def test_reranker_reads_only_the_first_words_but_returns_the_full_chunk(monkeypatch):
+    read = []
+
+    class Recorder:
+        def rerank(self, query, documents):
+            read.extend(documents)
+            return [1.0 for _ in documents]
+
+    monkeypatch.setattr(config, "RERANK_MAX_WORDS", 3)
+    monkeypatch.setattr(rerank_module, "load_model", lambda name: Recorder())
+    out = rerank_module.rerank("q", [chunk(0, "Year 2 · Block B one two three")])
+    assert read == ["Year 2 ·"]
+    assert out[0]["text"] == "Year 2 · Block B one two three"  # the LLM still gets everything
+
+
+def test_max_words_zero_reads_the_whole_chunk(monkeypatch):
+    monkeypatch.setattr(config, "RERANK_MAX_WORDS", 0)
+    assert rerank_module.shorten("a b c d") == "a b c d"
