@@ -33,6 +33,11 @@ CHUNK_HEADERS = os.getenv("CHUNK_HEADERS", "1") == "1"
 # Retrieval
 TOP_K = 5
 
+# Hybrid search (see bm25.py): vector search (meaning) + BM25 keyword search (exact rare words), merged with RRF.
+# Needs `python -m ragapp.bm25` once after every ingest.
+HYBRID = os.getenv("HYBRID", "0") == "1"
+BM25_MODEL = "Qdrant/bm25"  # 0.01 GB: tokenizer, English stemmer and stopwords; Qdrant computes the IDF
+
 # If the question names a year/block ("Year 2 Block B ..."), only search that year/block
 # plus pages that belong to no year (all the shared Study Content).
 # On by default since experiment 2 (see README results).
@@ -58,5 +63,6 @@ RERANK_INT8 = os.getenv("RERANK_INT8", "0") == "1"
 RERANK_KIND = os.getenv("RERANK_KIND", "cross")
 COLBERT_MODEL = "answerdotai/answerai-colbert-small-v1"  # 0.13 GB, 96 numbers per word piece
 COLBERT_COLLECTION = f"{COLLECTION}_colbert"
+BM25_COLLECTION = f"{COLLECTION}_bm25"
 # Downloaded model files (git-ignored). fastembed's default is the temp folder, which Windows cleans up.
 MODEL_CACHE = PROJECT_ROOT / "models"

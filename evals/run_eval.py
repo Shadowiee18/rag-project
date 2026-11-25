@@ -183,6 +183,7 @@ def summarise(results: list[dict], user_year_mode: str) -> dict:
             "rerank_model": config.RERANK_MODEL, "rerank_candidates": config.RERANK_CANDIDATES if config.RERANK_MODEL else None,
             "rerank_max_words": config.RERANK_MAX_WORDS if config.RERANK_MODEL else None,
             "rerank_kind": config.RERANK_KIND if config.RERANK_MODEL else None, "rerank_int8": config.RERANK_INT8,
+            "hybrid": config.HYBRID,
         },
     }
 
