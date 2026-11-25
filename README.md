@@ -76,6 +76,8 @@ Everything runs locally: answers never leave your PC.
 ```
 docker compose up -d                                   # start Qdrant (dashboard: http://localhost:6333/dashboard)
 uv run python -m ragapp.ingest                         # indexing time: chunk + embed + store every page
+uv run python -m ragapp.bm25                           #   + keyword index for hybrid search (2 s)
+uv run python -m ragapp.colbert                        #   + ColBERT vectors for the default reranker (5 min)
 uv run python -m ragapp.rag "How do I get VPN access?" # ask one question from the terminal
 uv run uvicorn ragapp.api:app --reload                 # or as an API: http://127.0.0.1:8000/docs
 uv run python evals/run_eval.py --name baseline        # score it against the golden set
@@ -328,3 +330,58 @@ misreading never actually happened. The 12 flips show the local judge is **not f
 about 1 in 100 labels changes when the same answer is graded again. The tables above use the re-graded numbers; only the
 "wrong" column moved (by one or two questions), "correct" is unchanged in every row. Local vs Claude judge: 76% same
 label, kappa 0.57 (was 0.58).
+
+### Hybrid search: BM25 keyword search + vector search
+
+Vector search matches meaning and blurs exact rare words ("keras", "task 8", "Block B"). BM25 scores chunks that contain
+the question's words, weighting rare words most. Both lists are merged with RRF (`HYBRID=1`, own Qdrant collection with
+sparse vectors, built in 2 s). In hindsight this should have been the baseline *before* reranking, so the first rows
+measure it alone. Dev split; `v2` = query rewriting v2; rerankers get 30 candidates (int8: 15).
+
+Page-style dev, 28 answerable + 4 unanswerable (one question ≈ 3.6 points):
+
+| Reranker | Search | hit@1 | hit@5 | hit@10 | MRR@10 | all evidence @5 | @10 | correct | wrong | median latency |
+|---|---|---|---|---|---|---|---|---|---|---|
+| none | vector | 64% | 89% | 93% | 0.76 | 57% | 68% | 39% | 4% | 3.5 s |
+| none | vector + v2 | 64% | 93% | 93% | 0.76 | 54% | 68% | 39% | 7% | 3.9 s |
+| none | **hybrid** | **75%** | 93% | 96% | **0.84** | **71%** | 75% | 43% | 0% | 3.8 s |
+| none | hybrid + v2 | 71% | 96% | 96% | 0.83 | 68% | 79% | 43% | 0% | 3.8 s |
+| cross-encoder (+ v2) | vector | 96% | 96% | 96% | 0.96 | 82% | 82% | 61% | 0% | 10.4 s |
+| cross-encoder (+ v2) | hybrid | **96%** | **100%** | **100%** | **0.97** | **86%** | **86%** | **64%** | 0% | 9.5 s |
+| int8, 15 (+ v2) | vector | 93% | 96% | 96% | 0.95 | 75% | 75% | 54% | 0% | 4.1 s |
+| int8, 15 (+ v2) | hybrid | 93% | 100% | 100% | 0.96 | 71% | 82% | 61% | 0% | 5.0 s |
+| ColBERT (+ v2) | vector | 86% | 96% | 96% | 0.90 | 71% | 75% | 50% | 0% | 3.9 s |
+| ColBERT (+ v2) | hybrid | 86% | 100% | 100% | 0.92 | 71% | 79% | 54% | 0% | **3.7 s** |
+
+Student-style dev, on the 17 questions every run shares (15 answerable + 2 unanswerable; the two date questions were
+added after the vector-only runs; one question ≈ 6.7 points):
+
+| Reranker | Search | hit@1 | hit@5 | hit@10 | MRR@10 | all evidence @5 | @10 | correct | wrong | median latency |
+|---|---|---|---|---|---|---|---|---|---|---|
+| none | vector | 33% | 47% | 47% | 0.38 | 20% | 27% | 13% | 13% | 3.4 s |
+| none | vector + v2 | 33% | 53% | 67% | 0.43 | 27% | 33% | 13% | 7% | 4.0 s |
+| none | hybrid | 40% | 47% | 67% | 0.46 | 27% | 40% | 20% | 7% | 3.7 s |
+| none | hybrid + v2 | 40% | 60% | 73% | 0.52 | 27% | 33% | 20% | 7% | 3.9 s |
+| cross-encoder (+ v2) | vector | 40% | 73% | 80% | 0.55 | 33% | 40% | 13% | 0% | 9.0 s |
+| cross-encoder (+ v2) | hybrid | **53%** | **80%** | **87%** | **0.63** | **40%** | **53%** | 27% | 7% | 9.5 s |
+| int8, 15 (+ v2) | vector | 47% | 67% | 67% | 0.53 | 33% | 40% | 13% | 7% | 3.7 s |
+| int8, 15 (+ v2) | hybrid | 47% | 67% | 80% | 0.59 | 27% | 40% | 20% | 7% | 5.1 s |
+| ColBERT (+ v2) | vector | 33% | 73% | 80% | 0.48 | 27% | 40% | 20% | 0% | 4.0 s |
+| ColBERT (+ v2) | hybrid | 47% | 67% | 80% | 0.56 | 27% | 33% | 20% | 7% | **3.6 s** |
+
+Findings:
+- **Hybrid alone is the cheapest step so far.** Without any reranker, page-style hit@1 goes 64% → 75% (+3 questions) and
+  all evidence in the top 5 57% → 71% (+4), for +0.3 s. That is about a third of the cross-encoder's hit@1 gain at a
+  twentieth of its cost.
+- **On student questions hybrid mainly adds recall**: right page in the top 10 47% → 67% (+3), but the top 5 only
+  improves together with rewrite v2 (47% → 60%). Short questions have few keywords for BM25 to match.
+- **With a reranker on top, hybrid finds what vector search never does.** Page hit@10 reaches 100% under all three
+  rerankers (one page was outside vector search's top 30 for every config before). With the cross-encoder, student hit@5
+  goes 73% → 80% and all evidence @10 40% → 53%: the best retrieval measured so far, but at 9.5 s.
+- **Under 5 s, the configs differ by 1-2 questions** (noise). Hybrid + ColBERT is the fastest (3.6-3.7 s) and its
+  reranking work is done at indexing time, so it does not slow down as the candidate list grows.
+- **The price of the 5 s target**, against hybrid + cross-encoder: page hit@1 96% → 86% (-3 questions), all evidence @5
+  86% → 71% (-4), student hit@5 80% → 67% (-2). About 6 s per answer saved.
+
+Defaults decided: `HYBRID=1`, `RERANK_KIND=colbert` (30 candidates), rewrite v2 kept. The cross-encoder stays one switch
+away (`RERANK_KIND=cross`) for when quality matters more than speed.

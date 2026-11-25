@@ -35,7 +35,8 @@ TOP_K = 5
 
 # Hybrid search (see bm25.py): vector search (meaning) + BM25 keyword search (exact rare words), merged with RRF.
 # Needs `python -m ragapp.bm25` once after every ingest.
-HYBRID = os.getenv("HYBRID", "0") == "1"
+# On by default since the hybrid comparison (see README): page-style hit@1 64% -> 75% without a reranker, +0.3 s.
+HYBRID = os.getenv("HYBRID", "1") == "1"
 BM25_MODEL = "Qdrant/bm25"  # 0.01 GB: tokenizer, English stemmer and stopwords; Qdrant computes the IDF
 
 # If the question names a year/block ("Year 2 Block B ..."), only search that year/block
@@ -51,7 +52,8 @@ QUERY_REWRITE = os.getenv("QUERY_REWRITE", "2")
 
 # Rerank (see rerank.py): vector search finds RERANK_CANDIDATES chunks, a cross-encoder re-sorts them.
 # "" = off. Models measured: "Xenova/ms-marco-MiniLM-L-6-v2" (0.08 GB), "BAAI/bge-reranker-base" (1.04 GB).
-# bge-reranker-base by default: page hit@1 64% -> 96% on dev. Costs ~6.5 s per question on CPU (30 candidates).
+# bge-reranker-base: page hit@1 64% -> 96% on dev, but ~6.5 s per question on CPU (30 candidates); used when
+# RERANK_KIND="cross" (below), which is no longer the default.
 RERANK_MODEL = os.getenv("RERANK_MODEL", "BAAI/bge-reranker-base")
 RERANK_CANDIDATES = int(os.getenv("RERANK_CANDIDATES", "30"))
 # Words of each chunk the reranker reads (0 = the whole chunk, ~250-300 words). Fewer = faster reranking.
@@ -60,7 +62,9 @@ RERANK_MAX_WORDS = int(os.getenv("RERANK_MAX_WORDS", "0"))
 RERANK_INT8 = os.getenv("RERANK_INT8", "0") == "1"
 # Which reranker: "cross" (cross-encoder RERANK_MODEL) | "colbert" (late interaction scored inside Qdrant,
 # needs `python -m ragapp.colbert` once after every ingest; see colbert.py).
-RERANK_KIND = os.getenv("RERANK_KIND", "cross")
+# "colbert" by default since the hybrid comparison: with hybrid search ~3.7 s per answer, within 1-2 questions of
+# the full cross-encoder's retrieval at 9.5 s. (RERANK_MODEL must stay non-empty: "" switches reranking off.)
+RERANK_KIND = os.getenv("RERANK_KIND", "colbert")
 COLBERT_MODEL = "answerdotai/answerai-colbert-small-v1"  # 0.13 GB, 96 numbers per word piece
 COLBERT_COLLECTION = f"{COLLECTION}_colbert"
 BM25_COLLECTION = f"{COLLECTION}_bm25"
