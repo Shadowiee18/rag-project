@@ -376,7 +376,7 @@ Findings:
 - **On student questions hybrid mainly adds recall**: right page in the top 10 47% → 67% (+3), but the top 5 only
   improves together with rewrite v2 (47% → 60%). Short questions have few keywords for BM25 to match.
 - **With a reranker on top, hybrid finds what vector search never does.** Page hit@10 reaches 100% under all three
-  rerankers (one page was outside vector search's top 30 for every config before). With the cross-encoder, student hit@5
+  rerankers (the same question missed it under every 30-candidate vector config; only 100 ColBERT candidates had found it). With the cross-encoder, student hit@5
   goes 73% → 80% and all evidence @10 40% → 53%: the best retrieval measured so far, but at 9.5 s.
 - **Under 5 s, the configs differ by 1-2 questions** (noise). Hybrid + ColBERT is the fastest (3.6-3.7 s) and its
   reranking work is done at indexing time, so it does not slow down as the candidate list grows.
