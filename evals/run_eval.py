@@ -41,8 +41,26 @@ Does the chatbot answer contain the key information of the reference answer, wit
 Reply with exactly one word: CORRECT, PARTIAL or WRONG."""
 
 
+REFUSAL = re.compile(r"\bi (?:don't|do not) know\b")
+# Whole words only: "INCORRECT" contains "CORRECT" but means WRONG.
+JUDGE_LABEL = re.compile(r"\b(CORRECT|INCORRECT|PARTIAL|PARTIALLY|WRONG)\b")
+LABEL_MEANS = {"INCORRECT": "WRONG", "PARTIALLY": "PARTIAL"}
+
+
+def normalise(answer: str) -> str:
+    """Lower-case, with the curly apostrophe LLMs often write turned into a straight one."""
+    return answer.lower().replace("’", "'")
+
+
 def is_refusal(answer: str) -> bool:
-    return "i don't know" in answer.lower() or "i do not know" in answer.lower()
+    """The answer says "I don't know" somewhere (a full refusal or half an answer)."""
+    return bool(REFUSAL.search(normalise(answer)))
+
+
+def only_refusal(answer: str) -> bool:
+    """The answer is "I don't know" and nothing else (citation marks and punctuation aside)."""
+    rest = REFUSAL.sub("", re.sub(r"\[\d+\]", "", normalise(answer)))
+    return is_refusal(answer) and not re.search(r"\w", rest)
 
 
 def first_hit_rank(retrieved_doc_ids: list[str], source_ids: list[str]) -> int | None:
@@ -61,11 +79,10 @@ def judge(question: str, expected: str, answer: str) -> str:
         # Same num_ctx as generate.py: a different value makes Ollama reload the model on every call.
         options={"temperature": 0, "num_ctx": 8192},
     )
-    word = response.message.content.strip().upper()
-    for label in ("CORRECT", "PARTIAL", "WRONG"):
-        if label in word:
-            return label
-    return "WRONG"
+    match = JUDGE_LABEL.search(response.message.content.upper())
+    if not match:
+        return "WRONG"
+    return LABEL_MEANS.get(match.group(1), match.group(1))
 
 
 def simulated_user_year(item: dict, page_years: dict[str, str]) -> str:
@@ -120,7 +137,8 @@ def evaluate_one(item: dict, student: StudentContext | None = None) -> dict:
         result["hit_rank"] = first_hit_rank(doc_ids, sources)
         top_used = set(doc_ids[: config.TOP_K])
         result["all_sources_in_context"] = all(s in top_used for s in sources)
-        result["judge"] = "WRONG" if result["refused"] else judge(item["question"], item["expected_answer"], answer_text)
+        # A bare "I don't know" is wrong without asking; half an answer goes to the judge, which can say PARTIAL.
+        result["judge"] = "WRONG" if only_refusal(answer_text) else judge(item["question"], item["expected_answer"], answer_text)
     return result
 
 
