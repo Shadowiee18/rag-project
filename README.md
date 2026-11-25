@@ -24,6 +24,23 @@ pipeline.
 | All answer evidence in the LLM's context | 57% | **71%** | 20% | **27%** |
 | Median time per answer | 3.5 s | **3.7 s** | 3.4 s | **3.6 s** |
 
+Held-out test split, run once at the end of Phase 2. The starting point is the same configuration, taken from an
+early run that covered every question:
+
+| | Page-style questions (26) | | Student-style questions (13) | |
+|---|---|---|---|---|
+| | start | **default** | start | **default** |
+| Right page ranked first | 77% | **77%** | 23% | **46%** |
+| Right page in the top 5 | 96% | **96%** | 54% | **69%** |
+| All answer evidence in the LLM's context | 65% | **73%** | 15% | **31%** |
+| Median time per answer | 4.0 s | **4.1 s** | 2.9 s | **4.8 s** |
+
+The test split is more modest than the development split. On page-style questions the page-level gain did not carry
+over: the starting point was already high there, and the improvement is only in the chunks the LLM sees (+2
+questions). Student-style questions improve on every retrieval measure, by 2-3 questions out of 13. The development
+gain on page-style questions (+6 questions ranked first) was partly a result of choosing the configuration on that
+same split, among many runs on 28 questions.
+
 - **Page-style** questions are written from the pages and use their vocabulary. **Student-style** questions come from
   a real student and are short, vague and date-dependent ("vpn?", "whats due this week"). They are much harder.
 - The best configuration measured (hybrid search + cross-encoder reranker) reaches 96% / 100% / 86% on page-style
@@ -102,6 +119,7 @@ the reranker's gain at almost no cost.
   next phase.
 - **Small evaluation sets** (28 and 15 answerable questions on development): differences of one or two questions are
   noise.
+- **The test split was partly seen**: some test questions were read in an early run, before the split was made.
 - **Answer correctness is judged by LLMs** only; no human labels yet. The local judge also changes about 1 in 100
   labels when the same answer is graded twice.
 - **Single-turn**: follow-up questions ("and when is it due?") are not rewritten with the earlier question.

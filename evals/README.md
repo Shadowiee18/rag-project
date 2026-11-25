@@ -315,3 +315,25 @@ Findings:
 
 Defaults decided: `HYBRID=1`, `RERANK_KIND=colbert` (30 candidates), rewrite v2 kept. The cross-encoder stays one switch
 away (`RERANK_KIND=cross`) for when quality matters more than speed.
+
+## Held-out test split (end of Phase 2)
+
+Run once with the final default (hybrid search + ColBERT, rewrite v2), totals only. "Start" is the Phase 2 starting
+configuration on the same test questions, computed from the early run that covered all questions (on the dev split
+that run and `clean` give identical retrieval: 64% / 89% page-style, 33% / 47% student-style).
+
+| Set | Config | hit@1 | hit@5 | all evidence @5 | correct | wrong | unanswerable refused | median latency |
+|---|---|---|---|---|---|---|---|---|
+| page (26 + 4) | start | 77% | 96% | 65% | 50% | 0% | 3/4 | 4.0 s |
+| page (26 + 4) | default | 77% | 96% | 73% | 54% | 4% | 3/4 | 4.1 s |
+| student (13 + 1) | start | 23% | 54% | 15% | 8% | 15% | 1/1 | 2.9 s |
+| student (13 + 1) | default | 46% | 69% | 31% | 15% | 0% | 1/1 | 4.8 s |
+
+- **Page-style: no page-level gain on test.** The starting point was already at 77% / 96%, against 64% / 89% on dev.
+  The gain that remains is chunk-level: all answer evidence reaches the LLM for 2 more questions.
+- **Student-style: better on every retrieval measure**, by 2-3 questions out of 13.
+- **Dev overstated the page-style gain.** The default was chosen among many configurations on 28 dev questions, so part
+  of its dev advantage is selection on that split. This is what the held-out split is for.
+- **Disclosure:** some test questions were read in the Phase 2 start run, before the split was made. No change was
+  made from per-question test results.
+
