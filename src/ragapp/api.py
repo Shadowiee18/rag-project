@@ -1,4 +1,4 @@
-"""HTTP API for the RAG system (same ideas as phase0 ex06).
+"""HTTP API for the RAG system.
 
 Run:  uv run uvicorn ragapp.api:app --reload    then open http://127.0.0.1:8000/docs
 """

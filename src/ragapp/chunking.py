@@ -1,4 +1,4 @@
-"""Fixed-size character chunking with overlap (from phase0 ex02).
+"""Fixed-size character chunking with overlap.
 
 This is the naive baseline on purpose: it cuts mid-sentence and ignores headings.
 Phase 2 will compare smarter chunking against it.

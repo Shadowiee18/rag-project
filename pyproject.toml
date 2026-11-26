@@ -25,5 +25,5 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-pythonpath = ["phase0/exercises", "src"]
-testpaths = ["phase0/tests", "tests"]
+pythonpath = ["src"]
+testpaths = ["tests"]
