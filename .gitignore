@@ -23,3 +23,6 @@ HANDOFF.md
 # Downloaded model files (rerankers, BM25), fetched on first use
 models/
 evals/results/*.err
+
+# User data: saved student profiles (SQLite database + its WAL files)
+data/profiles.sqlite3*
