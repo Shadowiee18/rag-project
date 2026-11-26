@@ -145,3 +145,13 @@ def test_a_year_override_alone_takes_the_block_from_the_date(client, seen):
 
 def test_ask_rejects_an_unknown_block(client):
     assert client.get("/ask", params={"q": "vpn", "year": "Year2", "block": "BlockZ"}).status_code == 422
+
+
+# ---------------------------------------------------------------- the chat page
+
+
+def test_the_chat_page_is_served_at_the_root(client):
+    response = client.get("/")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    assert "/profile" in response.text and "/ask" in response.text

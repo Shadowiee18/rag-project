@@ -1,6 +1,6 @@
 """HTTP API for the RAG system.
 
-Run:  uv run uvicorn ragapp.api:app --reload    then open http://127.0.0.1:8000/docs
+Run:  uv run uvicorn ragapp.api:app --reload    then open http://127.0.0.1:8000 (chat) or /docs (the API)
 
 Each browser gets a random id in a cookie the first time it saves a study year (PUT /profile).
 The year is kept on the server (profile_store.py); the block and week come from today's date.
@@ -10,9 +10,11 @@ import re
 import secrets
 from datetime import date
 from functools import lru_cache
+from pathlib import Path
 from typing import Annotated, Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from ragapp import config
@@ -49,6 +51,12 @@ def _saved(request: Request, store: ProfileStore) -> tuple[str, str]:
     user = _user_id(request)
     saved = store.get(user) if user else None
     return (saved.year, saved.given_in) if saved else ("", "")
+
+
+@app.get("/", include_in_schema=False)
+def chat_page():
+    """The chat page: asks the study year once, then sends questions to /ask."""
+    return FileResponse(Path(__file__).with_name("chat.html"))
 
 
 @app.get("/health")
