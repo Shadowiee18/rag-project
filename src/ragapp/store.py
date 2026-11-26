@@ -28,37 +28,30 @@ def add_chunks(client: QdrantClient, start_id: int, vectors: list[list[float]], 
     client.upsert(collection_name=config.COLLECTION, points=points)
 
 
-def build_filter(year: str | None, blocks: list[str] | None, shared: bool = True) -> Filter | None:
+def build_filter(year: str | None, blocks: list[str] | None) -> Filter | None:
     """Keep chunks from this year (and these blocks), plus chunks that belong to no year/block.
     Leave out template pages (if the index tags them and EXCLUDE_TEMPLATES is on).
 
     The "" option matters: shared Study Content pages have no year, and must stay searchable.
-    shared=False leaves them out: only the year's (and blocks') own pages (a question about one block).
     """
     must, must_not = [], []
-    none = [""] if shared else []
     if year:
-        must.append(FieldCondition(key="year", match=MatchAny(any=[year, *none])))
+        must.append(FieldCondition(key="year", match=MatchAny(any=[year, ""])))
         if blocks:
-            must.append(FieldCondition(key="block", match=MatchAny(any=[*blocks, *none])))
+            must.append(FieldCondition(key="block", match=MatchAny(any=[*blocks, ""])))
     if config.EXCLUDE_TEMPLATES:
         must_not.append(FieldCondition(key="page_type", match=MatchAny(any=["template"])))
     return Filter(must=must, must_not=must_not) if (must or must_not) else None
 
 
 def search(
-    client: QdrantClient,
-    query_vector: list[float],
-    k: int,
-    year: str | None = None,
-    blocks: list[str] | None = None,
-    shared: bool = True,
+    client: QdrantClient, query_vector: list[float], k: int, year: str | None = None, blocks: list[str] | None = None
 ) -> list[dict]:
     """Return the k closest chunks as dicts: the stored payload plus a 'score' and the Qdrant 'point_id'."""
     result = client.query_points(
         collection_name=config.COLLECTION,
         query=query_vector,
-        query_filter=build_filter(year, blocks, shared),
+        query_filter=build_filter(year, blocks),
         limit=k,
         with_payload=True,
     )

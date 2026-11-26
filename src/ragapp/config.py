@@ -68,10 +68,6 @@ BM25_MODEL = "Qdrant/bm25"  # 0.01 GB: tokenizer, English stemmer and stopwords;
 # plus pages that belong to no year (all the shared Study Content).
 # On by default since experiment 2 (see README results).
 FILTER_BY_QUESTION_YEAR = os.getenv("FILTER_BY_QUESTION_YEAR", "1") == "1"
-# 1: a question about one block ("what do we have next block?", "Year 1 Block C overview", "block c") searches only
-# that block's own pages (no shared pages), and its name ("Year 2 Block C") is added to the search queries.
-# Other questions keep the shared pages. Off until measured.
-BLOCK_ONLY_SEARCH = os.getenv("BLOCK_ONLY_SEARCH", "0") == "1"
 
 # Rewrite the question before searching (see rewrite.py):
 #   "0" off | "1" v1, LLM writes one query (rejected by the eval) | "2" v2, LLM expansion + student week, multi-query + RRF

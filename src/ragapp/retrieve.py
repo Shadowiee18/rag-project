@@ -61,30 +61,6 @@ def filter_for(
     return user_year, own
 
 
-def block_only_target(
-    question: str, user_year: str | None, user_block: str | None, today: date | None = None
-) -> tuple[str, list[str]] | None:
-    """With BLOCK_ONLY_SEARCH: the year and block(s) a question is about, when it names a block ("Year 1 Block C",
-    "block c", "Y1C", "semester 2") or says next / last block, and filter_for resolves that to blocks.
-    None otherwise (no block in the question, a whole year, nothing before / after): today's search."""
-    if not (config.BLOCK_ONLY_SEARCH and config.FILTER_BY_QUESTION_YEAR):
-        return None
-    if not (year_block_in_question(question)[1] or block_ref_in_question(question)):
-        return None
-    year, blocks = filter_for(question, user_year, user_block, today)
-    return (year, blocks) if year and blocks else None
-
-
-def search_scope(
-    question: str, user_year: str | None, user_block: str | None, today: date | None = None
-) -> tuple[str | None, list[str] | None, bool]:
-    """(year, blocks, shared): the filter for the searches. shared=False for a question about one block."""
-    target = block_only_target(question, user_year, user_block, today)
-    if target:
-        return target[0], target[1], False
-    return *filter_for(question, user_year, user_block, today), True
-
-
 def retrieve(
     question: str,
     k: int = config.TOP_K,
@@ -93,15 +69,14 @@ def retrieve(
     today: date | None = None,
 ) -> list[dict]:
     """user_year / user_block: the student's own year and block (e.g. 'Year2', 'BlockB'), and today's date
-    for "next block"; see filter_for. Pages with no year/block stay searchable, except for a question about one
-    block when BLOCK_ONLY_SEARCH is on (see search_scope)."""
-    year, blocks, shared = search_scope(question, user_year, user_block, today)
+    for "next block"; see filter_for. Pages with no year/block always stay searchable."""
+    year, blocks = filter_for(question, user_year, user_block, today)
     query_vector = embed([question])[0]
     if not config.HYBRID:
-        return search(get_client(), query_vector, k, year=year, blocks=blocks, shared=shared)
+        return search(get_client(), query_vector, k, year=year, blocks=blocks)
     depth = max(k, FUSION_DEPTH)
-    dense = search(get_client(), query_vector, depth, year=year, blocks=blocks, shared=shared)
-    return rrf_merge([dense, bm25_search(question, depth, year, blocks, shared)], k)  # meaning + exact words
+    dense = search(get_client(), query_vector, depth, year=year, blocks=blocks)
+    return rrf_merge([dense, bm25_search(question, depth, year, blocks)], k)  # meaning + exact words
 
 
 RRF_K = 60  # the usual constant: dampens how much rank 1 beats rank 2
@@ -134,11 +109,11 @@ def retrieve_many(
 ) -> list[dict]:
     """Search with several queries and merge with RRF. The filter is decided from the ORIGINAL question,
     so a rewrite can't change which block is searched. With HYBRID, every query also gets a BM25 search."""
-    year, blocks, shared = search_scope(question, user_year, user_block, today)
+    year, blocks = filter_for(question, user_year, user_block, today)
     client = get_client()
     vectors = embed(queries)  # one batch call for all queries
     depth = max(2 * k, FUSION_DEPTH)
-    lists = [search(client, v, depth, year=year, blocks=blocks, shared=shared) for v in vectors]
+    lists = [search(client, v, depth, year=year, blocks=blocks) for v in vectors]
     if config.HYBRID:
-        lists += [bm25_search(q, depth, year, blocks, shared) for q in queries]
+        lists += [bm25_search(q, depth, year, blocks) for q in queries]
     return rrf_merge(lists, k)

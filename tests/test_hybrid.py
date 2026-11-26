@@ -12,9 +12,9 @@ def chunk(doc, i=0):
 def fake_search_setup(monkeypatch, dense_docs, keyword_docs, seen):
     monkeypatch.setattr(retrieve, "embed", lambda texts: [[0.0] for _ in texts])
     monkeypatch.setattr(retrieve, "get_client", lambda: None)
-    monkeypatch.setattr(retrieve, "search", lambda client, v, k, year=None, blocks=None, shared=True: [chunk(d) for d in dense_docs][:k])
+    monkeypatch.setattr(retrieve, "search", lambda client, v, k, year=None, blocks=None: [chunk(d) for d in dense_docs][:k])
 
-    def fake_bm25(question, k, year=None, blocks=None, shared=True):
+    def fake_bm25(question, k, year=None, blocks=None):
         seen.append((question, year, blocks))
         return [chunk(d) for d in keyword_docs][:k]
 
