@@ -212,7 +212,7 @@ def summarise(results: list[dict], user_year_mode: str) -> dict:
             "total_max": round(max(total_times), 2),
         },
         "config": {
-            "embed_model": config.EMBED_MODEL, "llm_backend": config.LLM_BACKEND, "llm_model": config.LLM_MODEL,
+            "embed_model": config.EMBED_MODEL, "llm_backend": config.LLM_BACKEND, "student_line_as_source": config.STUDENT_LINE_AS_SOURCE, "llm_model": config.LLM_MODEL,
             "judge_model": config.JUDGE_MODEL,
             "chunk_size": config.CHUNK_SIZE, "chunk_overlap": config.CHUNK_OVERLAP, "top_k": config.TOP_K,
             "chunk_headers": config.CHUNK_HEADERS, "filter_by_question_year": config.FILTER_BY_QUESTION_YEAR,

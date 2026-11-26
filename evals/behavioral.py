@@ -284,7 +284,7 @@ def main() -> None:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
     summary = summarise(results) | {"config": {
         "query_rewrite": config.QUERY_REWRITE, "hybrid": config.HYBRID, "rerank_kind": config.RERANK_KIND,
-        "rerank_candidates": config.RERANK_CANDIDATES, "collection": config.COLLECTION, "llm_backend": config.LLM_BACKEND, "llm_model": config.LLM_MODEL,
+        "rerank_candidates": config.RERANK_CANDIDATES, "collection": config.COLLECTION, "llm_backend": config.LLM_BACKEND, "student_line_as_source": config.STUDENT_LINE_AS_SOURCE, "llm_model": config.LLM_MODEL,
     }}
     (RESULTS_DIR / f"{args.name}_behavioral_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     print(json.dumps({k: summary[k] for k in ("cases", "passed", "per_family", "per_segment", "invariance")}, indent=2))

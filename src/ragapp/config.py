@@ -30,6 +30,8 @@ LLM_BACKEND = os.getenv("LLM_BACKEND", "ollama")
 LLM_MODEL = os.getenv("LLM_MODEL", "qwen3:8b" if LLM_BACKEND == "ollama" else "qwen3.8-27b")
 BUAS_LLM_BASE_URL = os.getenv("BUAS_LLM_BASE_URL", "")
 BUAS_LLM_API_KEY = os.getenv("BUAS_LLM_API_KEY", "")
+# 1: the answer prompt treats the calendar-based Student line as a source (see generate.py). Off until measured.
+STUDENT_LINE_AS_SOURCE = os.getenv("STUDENT_LINE_AS_SOURCE", "0") == "1"
 # The eval's local judge stays the same model whatever answers, so correctness numbers stay comparable.
 JUDGE_MODEL = "qwen3:8b"
 

@@ -85,7 +85,7 @@ def test_generate_sends_system_and_user_messages(monkeypatch):
     answer = generate.generate("when is it due", [{"title": "T", "text": "due Friday"}])
     assert answer == "It is due Friday [1]."
     assert [m["role"] for m in seen[0]] == ["system", "user"]
-    assert seen[0][0]["content"] == generate.SYSTEM_PROMPT
+    assert seen[0][0]["content"] == generate.system_prompt()
 
 
 def test_env_file_is_read_without_overriding_real_environment(tmp_path, monkeypatch):
@@ -104,3 +104,25 @@ def test_env_file_is_read_without_overriding_real_environment(tmp_path, monkeypa
 
 def test_missing_env_file_is_fine(tmp_path):
     config.load_env_file(tmp_path / "nothing.env")
+
+
+def _system_message(monkeypatch, flag):
+    seen = []
+    monkeypatch.setattr(config, "STUDENT_LINE_AS_SOURCE", flag)
+    monkeypatch.setattr(generate.llm, "chat", lambda messages: seen.append(messages) or "ok")
+    generate.generate("which week is it", [{"title": "T", "text": "x"}], student="Today is ...")
+    return seen[0][0]["content"]
+
+
+def test_student_line_is_not_a_source_by_default(monkeypatch):
+    assert _system_message(monkeypatch, False) == generate.SYSTEM_PROMPT
+
+
+def test_student_line_as_source_changes_only_the_source_rules(monkeypatch):
+    prompt = _system_message(monkeypatch, True)
+    assert prompt == generate.STUDENT_SOURCE_PROMPT != generate.SYSTEM_PROMPT
+    assert "passages below and the Student line" in prompt
+    assert "holiday or study week" in prompt and "need no citation" in prompt
+    assert "Do not use outside knowledge" in prompt and "reply exactly: I don't know" in prompt
+    # everything after the source rules is the same as before
+    assert prompt.splitlines()[-1] == generate.SYSTEM_PROMPT.splitlines()[-1]
