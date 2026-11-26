@@ -1,0 +1,102 @@
+# Academic calendar: which dates are teaching weeks, breaks and closed days.
+#
+# Source: the BUas Teaching and Examination Regulations 2026-2027 (Article 3.3, block dates) and the
+# programme's year calendar 2026-2027 (week by week; the same weeks for every study year).
+# Update this file once a year when the new regulations come out; add the new year as a second entry.
+#
+# Every teaching week is listed with its own Monday on purpose: each block has a break in a different place,
+# so "week N" is never "first Monday + 7 * (N - 1)". A teaching week runs Monday to Friday.
+# Periods without teaching run Monday to Sunday. Block start/end are inclusive.
+# Year 3 has semesters instead of blocks: semester 1 = blocks A + B, semester 2 = blocks C + D.
+
+academic_years:
+  - name: "2026-27"
+    start: 2026-08-24        # first day this file knows (Year 1 introduction week)
+    end: 2027-08-29          # last day before the 2027-28 Block A (week 1 starts Monday 30 Aug 2027)
+    semesters: {1: [A, B], 2: [C, D]}
+
+    blocks:
+      A:
+        start: 2026-08-31
+        end: 2026-11-08
+        weeks:
+          - {week: 1, monday: 2026-08-31}
+          - {week: 2, monday: 2026-09-07}
+          - {week: 3, monday: 2026-09-14}
+          - {week: 4, monday: 2026-09-21}
+          - {week: 5, monday: 2026-09-28}
+          - {week: 6, monday: 2026-10-05}
+          - {week: 7, monday: 2026-10-12}
+          # autumn holiday 19 Oct
+          - {week: 8, monday: 2026-10-26}
+          - {week: 9, monday: 2026-11-02, note: assessment}
+      B:
+        start: 2026-11-09
+        end: 2027-01-31
+        weeks:
+          - {week: 1, monday: 2026-11-09}
+          - {week: 2, monday: 2026-11-16}
+          - {week: 3, monday: 2026-11-23}
+          - {week: 4, monday: 2026-11-30}
+          - {week: 5, monday: 2026-12-07}
+          - {week: 6, monday: 2026-12-14}
+          # Christmas holiday 21 Dec + 28 Dec
+          - {week: 7, monday: 2027-01-04}
+          - {week: 8, monday: 2027-01-11}
+          - {week: 9, monday: 2027-01-18, note: assessment}
+          # study week 25 Jan (no teaching on the calendar)
+      C:
+        start: 2027-02-01
+        end: 2027-04-11
+        weeks:
+          - {week: 1, monday: 2027-02-01}
+          # spring holiday 8 Feb
+          - {week: 2, monday: 2027-02-15}
+          - {week: 3, monday: 2027-02-22}
+          - {week: 4, monday: 2027-03-01}
+          - {week: 5, monday: 2027-03-08}
+          - {week: 6, monday: 2027-03-15}
+          - {week: 7, monday: 2027-03-22}
+          - {week: 8, monday: 2027-03-29}
+          - {week: 9, monday: 2027-04-05, note: assessment}
+      D:
+        start: 2027-04-12
+        end: 2027-06-27      # the calendar's week 10 ends Friday 25 June
+        ter_end: 2027-06-18  # the regulations say Block D ends 18 June; the calendar adds week 10
+        weeks:
+          - {week: 1, monday: 2027-04-12}
+          - {week: 2, monday: 2027-04-19}
+          # May holiday 26 Apr
+          - {week: 3, monday: 2027-05-03}
+          - {week: 4, monday: 2027-05-10}
+          - {week: 5, monday: 2027-05-17}
+          - {week: 6, monday: 2027-05-24}
+          - {week: 7, monday: 2027-05-31}
+          - {week: 8, monday: 2027-06-07, note: assessment (CB)}
+          - {week: 9, monday: 2027-06-14, note: assessment / resit (CB)}
+          - {week: 10, monday: 2027-06-21, note: resit / year wrap-up (CB)}
+
+    periods:
+      - {name: Year 1 introduction week, kind: intro_week, start: 2026-08-24, end: 2026-08-30}
+      - {name: autumn holiday, kind: holiday, start: 2026-10-19, end: 2026-10-25}
+      - {name: Christmas holiday, kind: holiday, start: 2026-12-21, end: 2027-01-03}
+      - {name: study week (no teaching on the calendar), kind: study_week, start: 2027-01-25, end: 2027-01-31}
+      - {name: spring holiday, kind: holiday, start: 2027-02-08, end: 2027-02-14}
+      - {name: May holiday, kind: holiday, start: 2027-04-26, end: 2027-05-02}
+      - {name: closure week, kind: closure_week, start: 2027-06-28, end: 2027-07-04}
+      - {name: finalisation week, kind: finalisation_week, start: 2027-07-05, end: 2027-07-11}
+      - {name: summer holiday, kind: summer_holiday, start: 2027-07-12, end: 2027-08-15}  # calendar: until Fri 13 Aug
+      - {name: staff back (no teaching), kind: no_teaching, start: 2027-08-16, end: 2027-08-22}
+      - {name: Year 1 introduction week (2027-28), kind: intro_week, start: 2027-08-23, end: 2027-08-29}
+
+    closed_days:               # BUas closed
+      2027-01-01: New Year's Day
+      2027-02-08: Carnival
+      2027-03-26: Good Friday
+      2027-03-29: Easter Monday
+      2027-04-26: King's Day (closed)
+      2027-04-27: King's Day
+      2027-05-05: Liberation Day
+      2027-05-06: Ascension Day
+      2027-05-07: mandatory day off
+      2027-05-17: Whit Monday
