@@ -34,7 +34,7 @@ def test_rerank_sorts_by_cross_encoder_score(monkeypatch):
 def test_answer_reranks_a_bigger_pool_then_keeps_the_best(monkeypatch):
     seen = {}
 
-    def fake_retrieve(question, k, user_year=None, user_block=None):
+    def fake_retrieve(question, k, user_year=None, user_block=None, today=None):
         seen["k"] = k
         return [chunk(i, "vpn" if i == 29 else "other") for i in range(k)]
 
@@ -54,7 +54,7 @@ def test_answer_reranks_a_bigger_pool_then_keeps_the_best(monkeypatch):
 def test_reranking_off_searches_only_what_is_needed_and_loads_no_model(monkeypatch):
     seen = {}
 
-    def fake_retrieve(question, k, user_year=None, user_block=None):
+    def fake_retrieve(question, k, user_year=None, user_block=None, today=None):
         seen["k"] = k
         return [chunk(i, "other") for i in range(k)]
 

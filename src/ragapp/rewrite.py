@@ -13,6 +13,7 @@ import re
 import ollama
 
 from ragapp import config
+from ragapp.resolver import block_ref_in_question
 from ragapp.retrieve import year_block_in_question
 from ragapp.student import StudentContext, search_phrase
 
@@ -124,7 +125,7 @@ def search_queries(question: str, student: StudentContext | None) -> list[str]:
     The original is always included, so a bad expansion can only add candidates, never remove the good ones.
     """
     queries = [question, expand_query(question)]
-    names_year_or_block = any(year_block_in_question(question))
+    names_year_or_block = any(year_block_in_question(question)) or block_ref_in_question(question)
     if student and not names_year_or_block and TIME_WORDS.search(question):
         phrase = search_phrase(student)
         if phrase:
@@ -136,7 +137,8 @@ def week_queries(question: str, student: StudentContext | None) -> list[str]:
     """QUERY_REWRITE=3, no LLM: the original question, plus a copy with the student's year/block/week for
     time questions ("whats due this week" -> "Year 2 Block B week 3 whats due this week")."""
     queries = [question]
-    if student and not any(year_block_in_question(question)) and TIME_WORDS.search(question):
+    names_year_or_block = any(year_block_in_question(question)) or block_ref_in_question(question)
+    if student and not names_year_or_block and TIME_WORDS.search(question):
         phrase = search_phrase(student)
         if phrase:
             queries.append(f"{phrase} {question}")

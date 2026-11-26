@@ -304,6 +304,28 @@ def resolve_block(ref: str, today: date, year: str, block: str = "") -> BlockTar
     return _named_block(ref, year, today)
 
 
+def block_ref_in_question(question: str) -> str:
+    """'what do we have next block?' -> 'next block'; '' when the question has no relative block."""
+    m = re.search(r"\b(next|last|previous) block\b", question.lower())
+    return m.group(0) if m else ""
+
+
+def segments_for(year: str, blocks: list[str]) -> list[str]:
+    """Block names -> the folders that year uses: Year 3 'BlockC' -> 'Semester2';
+    Year 1-2 'Semester1' -> 'BlockA', 'BlockB'. Other names stay as they are."""
+    calendar = load_calendar()[-1]  # the block -> semester split is the same every year
+    out: list[str] = []
+    for b in blocks:
+        if year == "Year3" and b.startswith("Block"):
+            names = [_segment(b[-1], year, calendar)]
+        elif year in {"Year1", "Year2"} and b.startswith("Semester"):
+            names = [f"Block{letter}" for letter in calendar.semesters[int(b[-1])]]
+        else:
+            names = [b]
+        out += [n for n in names if n not in out]
+    return out
+
+
 def _own_segment(today: date, year: str, block: str) -> str:
     """The student's segment as a folder name, or "" if unknown. Year 3 given as 'BlockC' -> 'Semester2'."""
     if not block:

@@ -1,10 +1,12 @@
 """Query time, step 1: find the chunks most similar to the question."""
 
 import re
+from datetime import date
 
 from ragapp import config
 from ragapp.bm25 import bm25_search
 from ragapp.embed import embed
+from ragapp.resolver import block_ref_in_question, resolve_block, segments_for
 from ragapp.store import get_client, search
 
 ORDINALS = {"first": "1", "second": "2", "third": "3"}
@@ -35,23 +37,40 @@ def year_block_in_question(question: str) -> tuple[str, list[str]]:
     return (f"Year{year}" if year else "", sorted(blocks))
 
 
-def filter_for(question: str, user_year: str | None, user_block: str | None) -> tuple[str | None, list[str] | None]:
-    """Year/block to filter on: from the question if it names one, else the student's own.
-    A block letter without a year is ambiguous (every year has a Block B), so it needs a year."""
-    year, blocks = year_block_in_question(question) if config.FILTER_BY_QUESTION_YEAR else ("", [])
-    if not year and user_year:
-        year = user_year
-        if not blocks and user_block:
-            blocks = [user_block]
-    return (year or None), (blocks if year else None)
+def filter_for(
+    question: str, user_year: str | None, user_block: str | None, today: date | None = None
+) -> tuple[str | None, list[str] | None]:
+    """Year/block to filter on, in this order:
+    1. the year/block the question names ("Year 1 Block C"; a block letter alone takes the student's year,
+       because every year has a Block B);
+    2. "next / last block" in the question, resolved from the student's block and the calendar
+       (after Year 1 Block D comes Year 2 Block A; with nothing before or after, the whole year);
+    3. the student's own year and block.
+    Block names are mapped to the folders the year uses (Year 3: semesters)."""
+    named_year, named_blocks = year_block_in_question(question) if config.FILTER_BY_QUESTION_YEAR else ("", [])
+    relative = block_ref_in_question(question) if config.FILTER_BY_QUESTION_YEAR else ""
+    if named_year or named_blocks:
+        year = named_year or user_year
+        return (year, segments_for(year, named_blocks)) if year else (None, None)
+    if not user_year:
+        return None, None
+    if relative:
+        target = resolve_block(relative, today or date.today(), user_year, user_block or "")
+        return (target.year, list(target.blocks)) if target else (user_year, None)
+    own = segments_for(user_year, [user_block]) if user_block else None
+    return user_year, own
 
 
 def retrieve(
-    question: str, k: int = config.TOP_K, user_year: str | None = None, user_block: str | None = None
+    question: str,
+    k: int = config.TOP_K,
+    user_year: str | None = None,
+    user_block: str | None = None,
+    today: date | None = None,
 ) -> list[dict]:
-    """user_year / user_block: the student's own year and block (e.g. 'Year2', 'BlockB'),
-    used only when the question names no year itself. Pages with no year/block always stay searchable."""
-    year, blocks = filter_for(question, user_year, user_block)
+    """user_year / user_block: the student's own year and block (e.g. 'Year2', 'BlockB'), and today's date
+    for "next block"; see filter_for. Pages with no year/block always stay searchable."""
+    year, blocks = filter_for(question, user_year, user_block, today)
     query_vector = embed([question])[0]
     if not config.HYBRID:
         return search(get_client(), query_vector, k, year=year, blocks=blocks)
@@ -81,11 +100,16 @@ def rrf_merge(result_lists: list[list[dict]], k: int) -> list[dict]:
 
 
 def retrieve_many(
-    queries: list[str], k: int, question: str, user_year: str | None = None, user_block: str | None = None
+    queries: list[str],
+    k: int,
+    question: str,
+    user_year: str | None = None,
+    user_block: str | None = None,
+    today: date | None = None,
 ) -> list[dict]:
     """Search with several queries and merge with RRF. The filter is decided from the ORIGINAL question,
     so a rewrite can't change which block is searched. With HYBRID, every query also gets a BM25 search."""
-    year, blocks = filter_for(question, user_year, user_block)
+    year, blocks = filter_for(question, user_year, user_block, today)
     client = get_client()
     vectors = embed(queries)  # one batch call for all queries
     depth = max(2 * k, FUSION_DEPTH)
