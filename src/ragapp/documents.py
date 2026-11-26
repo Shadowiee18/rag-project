@@ -1,4 +1,4 @@
-"""Document model and JSONL loading (from phase0 ex05)."""
+"""Document model and JSONL loading."""
 
 from pathlib import Path
 

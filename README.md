@@ -108,7 +108,7 @@ the reranker's gain at almost no cost.
 - **The eval was reviewed too**: a review found three bugs in the eval code (judge label parsing, partial refusals,
   and the app and eval merging result lists of different depth). Each got a failing test, a fix, and all 52 saved
   runs were re-graded from their saved answers.
-- **CI**: 136 unit tests on every pull request. They need no LLM, database or course data: the models are faked.
+- **CI**: 69 unit tests on every pull request. They need no LLM, database or course data: the models are faked.
 
 ## Known limitations
 
@@ -195,5 +195,4 @@ src/ragapp/
 evals/                                    # eval runner, re-grader, judge rubric, result summaries
 analysis/corpus_eda.py                    # corpus analysis that the cleaning rules come from
 tests/                                    # unit tests (no LLM, database or course data needed)
-phase0/                                   # warm-up exercises done before the project
 ```

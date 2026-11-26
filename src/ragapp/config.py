@@ -20,7 +20,7 @@ COLLECTION = os.getenv("COLLECTION", "adsai_chunks_clean" if CLEAN_CORPUS else "
 # Leave chunks of pages tagged page_type="template" out of search (only exists in a cleaned index).
 EXCLUDE_TEMPLATES = os.getenv("EXCLUDE_TEMPLATES", "1") == "1"
 
-# Chunking (characters, like phase0 ex02). ~1500 chars is roughly 350-400 tokens.
+# Chunking (characters). ~1500 chars is roughly 350-400 tokens.
 CHUNK_SIZE = 1500
 CHUNK_OVERLAP = 200
 
