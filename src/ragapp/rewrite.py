@@ -12,8 +12,8 @@ import re
 
 from ragapp import llm
 from ragapp.resolver import block_ref_in_question
-from ragapp.retrieve import year_block_in_question
-from ragapp.student import StudentContext, search_phrase
+from ragapp.retrieve import block_only_target, year_block_in_question
+from ragapp.student import StudentContext, readable_name, search_phrase
 
 REWRITE_PROMPT = """You turn a student's question into a search query for their study programme's course website.
 
@@ -106,27 +106,42 @@ def expand_query(question: str) -> str:
     return expanded or question
 
 
+def block_phrase(question: str, student: StudentContext | None) -> str:
+    """BLOCK_ONLY_SEARCH: the readable name of the block the question is about ("next block" -> 'Year 2 Block C'),
+    or "" when it is not about one block or already says that name."""
+    year, block, today = (student.year, student.block, student.today) if student else (None, None, None)
+    target = block_only_target(question, year, block, today)
+    if not target:
+        return ""
+    name = readable_name(*target)
+    return "" if name.lower() in " ".join(question.lower().split()) else name
+
+
 def search_queries(question: str, student: StudentContext | None) -> list[str]:
-    """The queries to search with: [original, expanded], plus the student's year/block/week for time questions.
+    """The queries to search with: [original, expanded], plus the student's year/block/week for time questions,
+    or (BLOCK_ONLY_SEARCH) the name of the block the question is about.
 
     The original is always included, so a bad expansion can only add candidates, never remove the good ones.
     """
     queries = [question, expand_query(question)]
     names_year_or_block = any(year_block_in_question(question)) or block_ref_in_question(question)
-    if student and not names_year_or_block and TIME_WORDS.search(question):
+    phrase = block_phrase(question, student)
+    if not phrase and student and not names_year_or_block and TIME_WORDS.search(question):
         phrase = search_phrase(student)
-        if phrase:
-            queries = [f"{phrase} {q}" for q in queries]
+    if phrase:
+        queries = [f"{phrase} {q}" for q in queries]
     return list(dict.fromkeys(queries))  # drop exact duplicates, keep order
 
 
 def week_queries(question: str, student: StudentContext | None) -> list[str]:
     """QUERY_REWRITE=3, no LLM: the original question, plus a copy with the student's year/block/week for
-    time questions ("whats due this week" -> "Year 2 Block B week 3 whats due this week")."""
+    time questions ("whats due this week" -> "Year 2 Block B week 3 whats due this week"), or (BLOCK_ONLY_SEARCH)
+    with the name of the block the question is about ("next block" -> "Year 2 Block C what do we have next block")."""
     queries = [question]
     names_year_or_block = any(year_block_in_question(question)) or block_ref_in_question(question)
-    if student and not names_year_or_block and TIME_WORDS.search(question):
+    phrase = block_phrase(question, student)
+    if not phrase and student and not names_year_or_block and TIME_WORDS.search(question):
         phrase = search_phrase(student)
-        if phrase:
-            queries.append(f"{phrase} {question}")
+    if phrase:
+        queries.append(f"{phrase} {question}")
     return queries

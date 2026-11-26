@@ -50,6 +50,12 @@ def _calendar_day(ctx: StudentContext) -> DayInfo | None:
     return info if info.block in segments_for(ctx.year, [ctx.block]) else None
 
 
+def readable_name(year: str, blocks: list[str]) -> str:
+    """Folder names -> words: ('Year2', ['BlockC']) -> 'Year 2 Block C'; two blocks -> 'Year 1 Block A and Block B'."""
+    names = [re.sub(r"^(Block|Semester)(\w)$", r"\1 \2", b) for b in blocks]
+    return f"{year.replace('Year', 'Year ')} {' and '.join(names)}".strip()
+
+
 def search_phrase(ctx: StudentContext) -> str:
     """Words for a search query, e.g. 'Year 2 Block B week 2'. Added by code, never by the LLM.
     The week comes from the academic calendar; in a break or study week there is no week."""

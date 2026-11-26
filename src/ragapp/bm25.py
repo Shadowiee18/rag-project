@@ -35,7 +35,9 @@ def sparse(embedding) -> SparseVector:
     return SparseVector(indices=embedding.indices.tolist(), values=embedding.values.tolist())
 
 
-def bm25_search(question: str, k: int, year: str | None = None, blocks: list[str] | None = None) -> list[dict]:
+def bm25_search(
+    question: str, k: int, year: str | None = None, blocks: list[str] | None = None, shared: bool = True
+) -> list[dict]:
     """The k chunks with the best BM25 score, as dicts like store.search returns (payload + score + point_id)."""
     query = next(iter(load_bm25().query_embed(question)))
     if len(query.indices) == 0:  # only stopwords ("is it?"): BM25 has nothing to match on
@@ -44,7 +46,7 @@ def bm25_search(question: str, k: int, year: str | None = None, blocks: list[str
         collection_name=config.BM25_COLLECTION,
         query=sparse(query),
         using=VECTOR_NAME,
-        query_filter=build_filter(year, blocks),
+        query_filter=build_filter(year, blocks, shared),
         limit=k,
         with_payload=True,
     )
