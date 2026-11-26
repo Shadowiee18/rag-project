@@ -102,7 +102,9 @@ the reranker's gain at almost no cost.
   the context, so the page metric was hiding a chunk problem.
 - **Answer metrics**: a local LLM judge grades correct / partial / wrong against the expected answer. A stronger model
   graded the same answers blind with a written rubric: 76% the same label (Cohen's kappa 0.57). Correctness numbers
-  are treated as rough; retrieval numbers are exact.
+  are treated as rough; retrieval numbers are exact. From Phase 3 on, Claude is the only judge (blind, rubric v1.2,
+  `evals/score.py`): the answering model may now be larger than the local 8B judge, and a judge weaker than the model
+  it grades is not trusted. The local judge stays available (`run_eval.py --judge local`) for the older numbers.
 - **Results per group**: every question is labelled with a question type (schedule, deadline, overview, rules, how-to,
   concept, people, out of scope; labelled by an LLM, not reviewed by a person) and a segment (the year/block its answer lives in, computed from the source pages), and
   development runs report each group separately. An average over everything hides where the system fails.

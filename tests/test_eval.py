@@ -83,3 +83,35 @@ def test_rejudge_regrades_a_saved_run_in_place(monkeypatch, tmp_path):
 def test_a_partial_answer_is_not_only_a_refusal():
     """Half an answer ("Block B uses X [1]. For Block A I don't know.") must reach the judge, which can say PARTIAL."""
     assert not run_eval.only_refusal("Block B uses the course reader [1]. For Block A, I don't know [3].")
+
+
+def _item():
+    return {"id": "q1", "question": "when is it due", "expected_answer": "Friday", "source_ids": ["p1"], "split": "dev"}
+
+
+def _fake_pipeline(monkeypatch, answer="It is due Friday [1]."):
+    out = {"answer": answer, "search_query": "q", "timing_s": {"rewrite": 0, "retrieve": 0, "rerank": 0, "generate": 0},
+           "chunks": [{"doc_id": "p1", "text": "due Friday"}]}
+    monkeypatch.setattr(run_eval, "rag_answer", lambda *a, **kw: out)
+
+
+def test_claude_judge_mode_never_calls_the_local_judge(monkeypatch):
+    _fake_pipeline(monkeypatch)
+    monkeypatch.setattr(run_eval.ollama, "chat", lambda **kw: (_ for _ in ()).throw(AssertionError("local judge used")))
+    result = run_eval.evaluate_one(_item(), judge="claude")
+    assert "judge" not in result and result["hit_rank"] == 1
+
+
+def test_local_judge_mode_still_grades(monkeypatch):
+    _fake_pipeline(monkeypatch)
+    fake_judge_reply(monkeypatch, "CORRECT")
+    assert run_eval.evaluate_one(_item(), judge="local")["judge"] == "CORRECT"
+
+
+def test_summary_without_local_grades_points_to_the_claude_grades(monkeypatch):
+    _fake_pipeline(monkeypatch)
+    monkeypatch.setattr(run_eval.ollama, "chat", lambda **kw: (_ for _ in ()).throw(AssertionError("local judge used")))
+    results = [run_eval.evaluate_one(_item(), judge="claude")]
+    answers = run_eval.answers_summary(results)["answers (answerable, LLM-judged)"]
+    assert answers["correct"] is None and "score.py" in answers["graded_by"]
+    assert answers["cites_sources"] == 1.0

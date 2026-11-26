@@ -116,7 +116,9 @@ def student_for(item: dict, user_year_mode: str, page_years: dict[str, str]) -> 
     return None
 
 
-def evaluate_one(item: dict, student: StudentContext | None = None) -> dict:
+def evaluate_one(item: dict, student: StudentContext | None = None, judge: str = "claude") -> dict:
+    """judge: "claude" = no grading here, Claude grades the saved answers afterwards (score.py);
+    "local" = the local LLM judge grades each answer now (used for the Phase 1-2 numbers)."""
     # The same pipeline as the app, but retrieving 10 chunks so we can see where the right page ranks.
     out = rag_answer(item["question"], config.TOP_K, student, retrieve_k=RETRIEVE_K)
     chunks, answer_text = out["chunks"], out["answer"]
@@ -148,7 +150,8 @@ def evaluate_one(item: dict, student: StudentContext | None = None) -> dict:
         result["hit_rank"] = first_hit_rank(doc_ids, sources)
         top_used = set(doc_ids[: config.TOP_K])
         result["all_sources_in_context"] = all(s in top_used for s in sources)
-        result["judge"] = grade(result)
+        if judge == "local":
+            result["judge"] = grade(result)
     return result
 
 
@@ -169,12 +172,14 @@ def answers_summary(results: list[dict]) -> dict:
     """The answer-quality numbers of a run (the part a re-judge recomputes)."""
     answerable = [r for r in results if r["source_ids"]]
     unanswerable = [r for r in results if not r["source_ids"]]
-    judged = [r["judge"] for r in answerable]
+    judged = [r["judge"] for r in answerable if "judge" in r]
+    share = lambda label: round(judged.count(label) / len(judged), 3) if judged else None
     return {
         "answers (answerable, LLM-judged)": {
-            "correct": round(judged.count("CORRECT") / len(answerable), 3),
-            "partial": round(judged.count("PARTIAL") / len(answerable), 3),
-            "wrong": round(judged.count("WRONG") / len(answerable), 3),
+            "graded_by": "local judge" if judged else "Claude, afterwards: evals/score.py <run>",
+            "correct": share("CORRECT"),
+            "partial": share("PARTIAL"),
+            "wrong": share("WRONG"),
             "false_refusals": round(sum(r["refused"] for r in answerable) / len(answerable), 3),
             "cites_sources": round(sum(r["cites"] for r in answerable) / len(answerable), 3),
         },
@@ -233,6 +238,8 @@ def main() -> None:
     parser.add_argument("--user-year", choices=["none", "simulated"], default="none",
                         help="simulated: pretend each asker told us their year (see simulated_user_year)")
     parser.add_argument("--golden", default=str(GOLDEN_PATH), help="question file, e.g. evals/golden_student.jsonl")
+    parser.add_argument("--judge", choices=["claude", "local"], default="claude",
+                        help="claude: no grading here, Claude grades the saved answers (score.py). local: the local LLM judge")
     parser.add_argument("--split", choices=["dev", "test", "all"], default="dev",
                         help="dev: tune and inspect failures here. test: held out, report totals only.")
     args = parser.parse_args()
@@ -254,7 +261,7 @@ def main() -> None:
         load_colbert() if config.RERANK_KIND == "colbert" else load_model(config.RERANK_MODEL)
     results = []
     for number, item in enumerate(items, start=1):
-        results.append(evaluate_one(item, student_for(item, args.user_year, page_years)))
+        results.append(evaluate_one(item, student_for(item, args.user_year, page_years), args.judge))
         print(f"  {number}/{len(items)}  {item['id']}", end="\r")
     print()
 
@@ -263,6 +270,7 @@ def main() -> None:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
     summary = summarise(results, args.user_year)
     summary["config"]["split"] = args.split
+    summary["config"]["judge"] = args.judge
     summary["config"]["golden"] = Path(args.golden).name
     if args.split == "dev":  # per-group numbers only where failures may be inspected; test stays totals only
         summary["by_question_type"] = group_summary(results, "question_type")

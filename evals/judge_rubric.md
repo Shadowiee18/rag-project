@@ -1,9 +1,12 @@
-# Judge rubric (v1.1)
+# Judge rubric (v1.2)
 
+Changes in v1.2: the Student line (today's date, year, block, week, holiday; written by code from the official
+calendar) counts as context, like the chunks.
 Changes in v1.1: key facts are defined by what the question asks (two graders applied v1 differently).
 
 Used by every judge, human or model, so grades are comparable. Grade each answer on its own,
-using only: the question, the expected answer, the numbered context chunks the system saw, and the answer.
+using only: the question, the expected answer, the numbered context chunks the system saw, the Student line
+(if the run has one), and the answer.
 Do not use outside knowledge about the course.
 
 ## 1. Correctness: compared with the expected answer
@@ -17,7 +20,7 @@ a next step) are optional: leaving them out does not make an answer `partial`.
 Extra correct detail is fine. Different wording is fine.
 
 ## 2. Faithfulness: compared with the context chunks
-- `faithful`: every factual claim in the answer is supported by the context chunks.
+- `faithful`: every factual claim in the answer is supported by the context chunks or the Student line.
 - `unfaithful`: at least one claim is not in the chunks (made up, or taken from general knowledge),
   or a claim is applied to the wrong thing (e.g. Block B's fact presented as Block A's).
   List the unsupported claims.
