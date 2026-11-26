@@ -503,3 +503,23 @@ right / wrong / abstained for the 117 cases with an answer to read (the CRAG sco
   pages. "Next / last block" is still a search problem (2 → 3 of 18), not a model problem.
 - Model choice: not changed yet. The 27B model is the safer one (fewest wrong answers); the 8B scores higher on exact
   match because it guesses, and sometimes guesses right.
+
+### Prompt fix tried: the Student line as a source (`STUDENT_LINE_AS_SOURCE=1`) - not adopted
+
+The system prompt now optionally says the calendar-based Student line is a source too, including "this week is a
+holiday or study week" (no citation needed). Measured on the 27B model (same suite):
+
+| `qwen3.8-27b` (117 cases with an answer to read) | Right | Wrong | Abstained | CRAG score |
+|---|---|---|---|---|
+| prompt as before | 68 | **5** | 44 | **+0.54** |
+| Student line as a source | 72 | 13 | 32 | +0.50 |
+| breaks only (30): before → with the fix | 7 → 11 | 5 → 10 | 18 → 9 | |
+
+- The model became willing to answer in holidays, not accurate: of 12 abstentions it gave up, about 4 became right and
+  8 became wrong (e.g. "week 8" in the study week). Wrong answers are what this project minimises, so the switch stays
+  off. A prompt cannot make a model reliably follow a negative fact ("no teaching this week"); the calendar route
+  (step 6) answers "which week / is it a holiday" in code instead.
+- Model decision, by a rule set before the run (the 27B must beat the local 8B on the CRAG score and give no more wrong
+  answers): the 27B model wins with the prompt as before (+0.54 vs +0.44, 5 vs 28 wrong). The same test on the local 8B
+  was skipped. Before it becomes the default, it still has to pass the normal dev eval, graded by Claude.
+
