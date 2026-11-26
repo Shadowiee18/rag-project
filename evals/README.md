@@ -523,3 +523,28 @@ holiday or study week" (no citation needed). Measured on the 27B model (same sui
   answers): the 27B model wins with the prompt as before (+0.54 vs +0.44, 5 vs 28 wrong). The same test on the local 8B
   was skipped. Before it becomes the default, it still has to pass the normal dev eval, graded by Claude.
 
+## Phase 3: the answering model on the development split, graded blind by Claude
+
+The 27B model passed the behavioural suite (above); this checks that it is not worse on everything else (rules,
+how-tos, course content). Development split, default retrieval, answers from local `qwen3:8b` (the step 4 run) and
+from `qwen3.8-27b` on the BUas service. All 102 answers were mixed, given random ids and graded blind by Claude
+subagents with rubric v1.2 (8 batches, each grader saw only its own batch); then mapped back.
+
+| Development split | Page (32) 8B → 27B | Student (19) 8B → 27B | Both (51): 27B better / worse, McNemar |
+|---|---|---|---|
+| Correct | 25 → 27 | 6 → 6 | 3 / 1, p = 0.63 |
+| Not wrong (correct or partial) | 31 → 31 | 11 → 13 | 3 / 1, p = 0.63 |
+| **Faithful** (every claim in the chunks or Student line) | 27 → **32** | 10 → **16** | **12 / 1, p = 0.003** |
+| Citations ok (answered questions) | 83% → 100% | 44% → 85% | |
+| Unanswerable correctly refused | 3/4 → 4/4 | 2/2 → 2/2 | |
+| Right page ranked first / in top 5 | same | 41% → 35% / 59% → 65% | query rewriting uses the LLM too |
+| Median time per answer | 4.2 → 4.6 s | 4.5 → 5.0 s | |
+
+- **Decision: the BUas `qwen3.8-27b` is the default** (`LLM_BACKEND=buas`). It is as often correct, and its answers are
+  far more often fully supported by their sources: the only difference here with p < 0.05. In the behavioural suite
+  it gave 5 wrong dates/weeks against 28. Cost: about 0.4 s more per answer, and it needs the BUas service (campus or
+  VPN); `LLM_BACKEND=ollama` keeps the fully local setup.
+- **The old local judge is confirmed unreliable**: on the 8B answers it agreed with Claude on 68% (page, kappa 0.33)
+  and 59% (student, kappa 0.41) of labels. From Phase 3 on, Claude grades (`run_eval.py --judge claude`, default).
+- Student-style answers are still mostly not correct (6 of 19 for both models): those are retrieval and schedule
+  problems (the calendar route, step 6), not model problems.

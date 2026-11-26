@@ -41,6 +41,17 @@ questions). Student-style questions improve on every retrieval measure, by 2-3 q
 gain on page-style questions (+6 questions ranked first) was partly a result of choosing the configuration on that
 same split, among many runs on 28 questions.
 
+**Answering model (Phase 3).** The same retrieval, with the local `qwen3:8b` or `qwen3.8-27b` on the BUas LLM service
+writing the answer; all 51 development answers graded blind by Claude with the rubric:
+
+| Development split (51) | `qwen3:8b`, local | **`qwen3.8-27b`, BUas (default)** |
+|---|---|---|
+| Correct | 31 | **33** |
+| Faithful: every claim in its sources | 37 | **48** (12 better, 1 worse: McNemar p = 0.003) |
+| Wrong dates/weeks in the 117-case behavioural suite | 28 | **5** |
+
+The larger model is not right more often, but it makes things up far less: it says "I don't know" instead of guessing.
+
 - **Page-style** questions are written from the pages and use their vocabulary. **Student-style** questions come from
   a real student and are short, vague and date-dependent ("vpn?", "whats due this week"). They are much harder.
 - The best configuration measured (hybrid search + cross-encoder reranker) reaches 96% / 100% / 86% on page-style
@@ -63,7 +74,7 @@ flowchart LR
         F --> R[Query expansion<br/>+ current block week]
         R --> H[Vector + BM25 search<br/>per query, merged with RRF]
         H --> X[ColBERT rerank<br/>30 → 5 chunks]
-        X --> G[qwen3:8b answer<br/>with citations or<br/>'I don't know']
+        X --> G[LLM answer: qwen3.8-27b on BUas<br/>or local qwen3:8b; with citations<br/>or 'I don't know']
     end
     D -.-> H
     B -.-> H
@@ -149,8 +160,9 @@ the reranker's gain at almost no cost.
 
 ## Running it
 
-Requirements: Docker, [uv](https://docs.astral.sh/uv/), [Ollama](https://ollama.com) and an NVIDIA GPU with 8 GB
-(the 4-bit `qwen3:8b` uses about 6 GB). The rerankers run on the CPU.
+Requirements: Docker, [uv](https://docs.astral.sh/uv/) and [Ollama](https://ollama.com) (local embeddings, about
+1.2 GB of GPU memory). The answers come from the BUas LLM service by default (a BUas account, campus network or VPN);
+`LLM_BACKEND=ollama` answers fully locally with `qwen3:8b` instead (NVIDIA GPU with 8 GB). The rerankers run on the CPU.
 
 The course pages are not in the repository (they are behind a login). To use your own documents, put one JSON object
 per line in `data/raw/adsai_pages.jsonl`:
@@ -184,10 +196,10 @@ Settings live in [src/ragapp/config.py](src/ragapp/config.py); the main ones can
 | `RERANK_CANDIDATES` | `30` | chunks the reranker re-sorts |
 | `QUERY_REWRITE` | `2` | `0`: off |
 | `CLEAN_CORPUS` | `1` | `0`: index the raw pages (re-ingest needed) |
-| `LLM_BACKEND` | `ollama` | `buas`: the answering LLM runs on the BUas LLM service (OpenAI-compatible API) |
-| `LLM_MODEL` | `qwen3:8b` | with `buas`: a model the service offers, default `qwen3.8-27b` |
+| `LLM_BACKEND` | `buas` | `ollama`: answer locally with `qwen3:8b` (no BUas account needed) |
+| `LLM_MODEL` | `qwen3.8-27b` | another model the BUas service offers; with `ollama`, default `qwen3:8b` |
 
-`LLM_BACKEND=buas` reads `BUAS_LLM_BASE_URL` and `BUAS_LLM_API_KEY` from a git-ignored `.env` file in the project
+The BUas backend reads `BUAS_LLM_BASE_URL` and `BUAS_LLM_API_KEY` from a git-ignored `.env` file in the project
 folder (the BUas service needs the campus network or VPN). Embeddings and the eval judge stay local either way.
 
 ## Stack
