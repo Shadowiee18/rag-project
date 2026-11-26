@@ -424,3 +424,47 @@ Step 2 added the official 2026-27 year calendar and a resolver. Step 4 uses them
   unit tests (including directional ones: changing the block must change the filter). Measuring it end to end needs
   the behavioural suite of step 3.
 
+## Phase 3, step 3: behavioural suite, before and after step 4
+
+The normal eval asks its student questions as Year 2 Block B on two November dates, so it could not show the step 4
+gain. `evals/behavioral.py` asks template questions as a student of each of the 10 segments (Year 1-2 Blocks A-D,
+Year 3 Semesters 1-2), on Tuesday of week 1, Tuesday of week 3, Thursday of the last teaching week and the Wednesday
+of every break, in the CheckList style (Ribeiro et al., ACL 2020):
+- **MFT** (minimum functionality): "which week of the block are we in?" (90), "what are the dates of week N?" (20),
+  "when does the next block start?" (7, only where that block is in this year's calendar). Exact match: the first
+  week number, or the first dates, in the answer; in a break the answer must say there is no teaching.
+- **DIR** (directional): "what do we have next block?" / "what did we do last block?" (18): the top search result
+  must be a page of that other block.
+- **INV** (invariance): the two wordings of the week question (45 pairs) must give the same week.
+
+Gold answers are computed from `calendar.yaml` by the suite's own code, not the app's resolver. Same default config
+for both runs (hybrid + ColBERT, 30 candidates, rewrite v2); "before" is `main` with step 2 only.
+
+| Family | Before step 4 | After step 4 |
+|---|---|---|
+| Which week: teaching days | 13 / 60 | **60 / 60** |
+| Which week: breaks | 0 / 30 | 12 / 30 |
+| Dates of week N | 1 / 20 | 6 / 20 |
+| Next block starts | 0 / 7 | 1 / 7 |
+| DIR next block (top result) | 0 / 9 | 2 / 9 |
+| DIR last block (top result) | 0 / 9 | 0 / 9 |
+| INV: both wordings agree | 14 / 45 | 35 / 45 |
+| **All cases** | **14 / 135 (10%)** | **81 / 135 (60%)** |
+
+Per segment (all families): Year 1 A-D 8 / 7 / 8 / 8% → 75 / 40 / 54 / 50%; Year 2 A-D 15 / **33** / 8 / 8% →
+54 / 53 / 54 / 58%; Year 3 Semester 1-2 6 / 0% → 77 / 85%. Before, Year 2 Block B was the only segment above 15%:
+it was the one block page whose timeline the old week lookup could read.
+
+What the failures say (read on the answers, all segments):
+- **The week number is solved by the student line**: with the calendar's week in the prompt, the model repeats it
+  every time. Without it, it guessed (and gave different weeks for the two wordings).
+- **Breaks**: the prompt says "This week is the Christmas holiday", yet in 18 of 30 cases the model still names a week
+  number. An 8B model does not reliably follow a negative fact; a calendar route should answer this in code.
+- **Dates of other weeks**: only the current week's dates are in the prompt. The model either says it does not know
+  (the last week of every block) or subtracts days itself and is off by one (8-12 September for 7-11 September).
+  Exactly the date arithmetic the design moves into code.
+- **Next / last block**: the filter now lets the right block's pages through (some target-block page is in the top 5
+  for 5 of 18, was 0), but it also keeps the shared Study Content and General pages, and for a vague question like
+  "what do we have next block?" those rank first. The fix is general, not per question: an overview question about a
+  resolved block should search that block's own pages (and its year/block words), not the shared ones.
+
