@@ -165,10 +165,16 @@ uv run python -m ragapp.ingest             # clean, chunk, embed, store
 uv run python -m ragapp.bm25               # keyword index (2 s)
 uv run python -m ragapp.colbert            # reranker index (about 5 min)
 
-uv run python -m ragapp.rag "is using an llm allowed" --year Year2 --block BlockB
-uv run uvicorn ragapp.api:app              # GET /ask?q=...&year=Year2&block=BlockB, docs at /docs
+uv run python -m ragapp.rag "is using an llm allowed" --year Year2   # block from today's date, or --block BlockB
+uv run uvicorn ragapp.api:app              # chat page at http://127.0.0.1:8000, API docs at /docs
 uv run pytest
 ```
+
+The chat page asks a student's study year once per academic year and keeps it on the server (SQLite, `PROFILE_DB`,
+keyed by a random id in an HttpOnly cookie). The block and week come from today's date and the academic calendar
+([calendar.yaml](src/ragapp/calendar.yaml)); in the summer or outside the calendar the block is reported as unknown.
+`GET /profile` / `PUT /profile` read and save the year; `/ask` answers 409 until it is known, and takes
+`year=` / `block=` as overrides for testing.
 
 Settings live in [src/ragapp/config.py](src/ragapp/config.py); the main ones can be overridden with environment variables:
 
@@ -200,8 +206,10 @@ src/ragapp/
 ├── ingest.py, chunking.py, cleaning.py   # indexing: load, clean, chunk, embed, store
 ├── bm25.py, colbert.py                   # the two extra indexes
 ├── student.py, rewrite.py                # who is asking and when; query expansion
+├── profile.py, profile_store.py          # study year once per academic year; saved profiles (SQLite)
 ├── retrieve.py, rerank.py                # filter, hybrid search, RRF; rerankers
 ├── generate.py, rag.py, api.py           # answer prompt; the whole pipeline; HTTP API
+├── chat.html                             # the chat page the API serves at /
 └── config.py                             # every switch in one place
 evals/                                    # eval runner, re-grader, judge rubric, result summaries
 analysis/corpus_eda.py                    # corpus analysis that the cleaning rules come from
