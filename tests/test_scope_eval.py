@@ -84,3 +84,14 @@ def test_tune_scores_filter_and_boost_candidates(monkeypatch):
     out = se.tune(cases)
     assert out["filter"]["dir"]["hit@1"] == 0
     assert out["chosen"]["scores"]["dir"]["hit@1"] == 1 and out["chosen"]["scores"]["counter"]["hit@5"] == 1
+
+
+def test_tune_with_fixed_weights_scores_only_those():
+    shared = {**chunk("shared"), "score": 20.0}
+    block = {**chunk("y2c", "Year2", "BlockC"), "score": 19.0}
+    low = {**chunk("other"), "score": 10.0}
+    cases = [{"set": "counter", "sources": ["shared"], "scope": ["Year2", ["BlockC"]],
+              "filter": [shared, block, low], "boost": [shared, block, low]}]
+    out = se.tune(cases, weights=(0.05, 0.0))
+    assert out["boost"]["w_block"] == 0.05 and out["passes"] is True and "grid" not in out
+    assert se.tune(cases, weights=(2.0, 0.0))["boost"]["scores"]["counter"]["hit@1"] == 0

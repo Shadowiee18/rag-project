@@ -82,13 +82,13 @@ def search_lists(client, vectors: list, queries: list[str], depth: int, year: st
     """The result lists to merge: a vector search per query (+ BM25 per query with HYBRID), for each scope.
 
     SCOPE_MODE "filter": one scope, the year/block plus shared pages.
-    SCOPE_MODE "boost": everything (no year/block filter), and the scope's own pages (no shared ones), so the
-    scope's pages are candidates even in a large corpus; scope_boost then decides the order.
+    SCOPE_MODE "boost": that same search, and one over the scope's own pages only (no shared ones), so the
+    scope's pages are candidates even when shared pages fill the first list; scope_boost then decides the order.
+    (Searching everything instead of the first list was measured and rejected: other years' pages crowd in.)
     """
-    if config.SCOPE_MODE == "boost":
-        scopes = [(None, None, True)] + ([(year, blocks, False)] if year else [])
-    else:
-        scopes = [(year, blocks, True)]
+    scopes = [(year, blocks, True)]
+    if config.SCOPE_MODE == "boost" and year:
+        scopes.append((year, blocks, False))
     lists = []
     for scope_year, scope_blocks, shared in scopes:
         lists += [search(client, v, depth, year=scope_year, blocks=scope_blocks, shared=shared) for v in vectors]

@@ -1,18 +1,18 @@
 """Tune SCOPE_MODE=boost (retrieval only, no answers): does a bonus for the question's scope beat the filter?
 
 Step 1, --dump (uses Ollama for embeddings, the LLM for query expansion, Qdrant and ColBERT): for every case, the
-reranked candidates (~30) of both modes, saved once: "filter" (today's search) and "boost" (everything + the scope's
-own pages, before any bonus).
+reranked candidates (~30) of both modes, saved once: "filter" (today's search) and "boost" (today's search + one over
+the scope's own pages, before any bonus).
 Step 2, --tune (no models): re-sort the boost candidates with every weight pair of the grid, score every set, and
 choose the weights by the rule below. Seconds, so the grid costs nothing.
 
-Case sets (development split only; the test split stays held out):
+Case sets (--split dev to tune; --split test once, with the weights fixed from dev, totals only):
   page      dev page-style questions, no asker context: the scope comes only from the question itself.
             (Not the simulated asker year: it is the year of the answer page, so a year bonus would win by
             construction.)
   student   dev student questions with their own context (Year 2 Block B, November).
   dir       the behavioural suite's "what do we have next block?" / "what did we do last block?" (18):
-            the top result must be a page of that block.
+            the top result must be a page of that block. (Templates: the same cases in both splits.)
   counter   counter-examples: every dev question whose answer is on a SHARED page, asked with a block in front
             ("Year 1 Block C: <question>"), rotating over the 10 segments. The shared page must stay in the top 5.
             A scope rule that hides or buries shared pages fails here.
@@ -21,8 +21,10 @@ Rule, fixed before the run: among the weight pairs whose hit@5 on page, student 
 mode's, take the one with the most hits (hit@1 + hit@5 summed over all four sets); ties -> the smaller weights.
 If no pair passes, boost is not adopted.
 
-Run:  uv run python evals/scope_eval.py --dump scope1     (asks nothing: ask the student before running it)
-      uv run python evals/scope_eval.py --tune scope1
+Run:  uv run python evals/scope_eval.py --dump scope2     (asks nothing: ask the student before running it)
+      uv run python evals/scope_eval.py --tune scope2
+      uv run python evals/scope_eval.py --dump scope2_test --split test
+      uv run python evals/scope_eval.py --tune scope2_test --weights 0.05,0   (the dev choice; no grid)
 Writes evals/results/<name>_scope_candidates.jsonl (git-ignored) and <name>_scope_summary.json.
 """
 
@@ -109,10 +111,16 @@ def choose(grid: dict[tuple[float, float], dict], baseline: dict) -> tuple[float
     return max(passing, key=lambda w: (total(grid[w]), -(w[0] + w[1]), -w[0]))
 
 
-def tune(cases: list[dict]) -> dict:
+def tune(cases: list[dict], weights: tuple[float, float] | None = None) -> dict:
+    """weights=None: the whole grid and the rule's choice. weights given: only those (the held-out check)."""
     from ragapp.retrieve import scope_boost  # pure function, no models
 
     baseline = score_sets(cases, lambda c: c["filter"])
+    if weights:
+        boosted = score_sets(cases, lambda c: scope_boost(c["boost"], c["scope"][0], c["scope"][1], *weights))
+        passes = all(boosted[n]["hit@5"] >= baseline[n]["hit@5"] for n in ("page", "student", "counter"))
+        return {"filter": baseline, "boost": {"w_block": weights[0], "w_year": weights[1], "scores": boosted},
+                "passes": passes}
     grid = {}
     for w_block, w_year in itertools.product(W_BLOCK, W_YEAR):
         grid[(w_block, w_year)] = score_sets(
@@ -130,7 +138,7 @@ def tune(cases: list[dict]) -> dict:
 # ---------------------------------------------------------------- step 1: dump candidates (models)
 
 
-def build_cases(golden_dir: Path) -> list[dict]:
+def build_cases(golden_dir: Path, split: str = "dev") -> list[dict]:
     import behavioral
     import run_eval
     from ragapp import config
@@ -143,7 +151,7 @@ def build_cases(golden_dir: Path) -> list[dict]:
 
     def dev(name: str) -> list[dict]:
         lines = (golden_dir / name).read_text(encoding="utf-8").splitlines()
-        return [i for i in (json.loads(line) for line in lines if line.strip()) if i.get("split") == "dev"]
+        return [i for i in (json.loads(line) for line in lines if line.strip()) if i.get("split") == split]
 
     page, student = dev("golden_set.jsonl"), dev("golden_student.jsonl")
     cases = [{**i, "set": "page"} for i in page if i["source_ids"]]
@@ -160,7 +168,7 @@ def build_cases(golden_dir: Path) -> list[dict]:
     return cases
 
 
-def dump(name: str, golden_dir: Path) -> None:
+def dump(name: str, golden_dir: Path, split: str = "dev") -> None:
     from ragapp import config
     from ragapp.colbert import load_colbert
     from ragapp.rerank import rerank
@@ -170,7 +178,7 @@ def dump(name: str, golden_dir: Path) -> None:
 
     assert config.QUERY_REWRITE in ("2", "3") and config.RERANK_MODEL, "written for the default pipeline"
     load_colbert()
-    cases = build_cases(golden_dir)
+    cases = build_cases(golden_dir, split)
     keep = ("doc_id", "chunk_index", "year", "block", "score")
     RESULTS_DIR.mkdir(exist_ok=True)
     with open(RESULTS_DIR / f"{name}_scope_candidates.jsonl", "w", encoding="utf-8") as f:
@@ -194,15 +202,18 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--dump", metavar="NAME", help="step 1: save the candidates of both modes (models)")
     parser.add_argument("--tune", metavar="NAME", help="step 2: grid over the weights (no models)")
+    parser.add_argument("--split", choices=["dev", "test"], default="dev")
+    parser.add_argument("--weights", help="w_block,w_year: score only these (the held-out check), e.g. 0.05,0")
     parser.add_argument("--golden-dir", type=Path, default=EVALS_DIR, help="folder with golden_set.jsonl and golden_student.jsonl")
     args = parser.parse_args()
     if args.dump:
-        dump(args.dump, args.golden_dir)
+        dump(args.dump, args.golden_dir, args.split)
     if args.tune:
         lines = (RESULTS_DIR / f"{args.tune}_scope_candidates.jsonl").read_text(encoding="utf-8").splitlines()
-        summary = tune([json.loads(line) for line in lines if line.strip()])
+        weights = tuple(float(w) for w in args.weights.split(",")) if args.weights else None
+        summary = tune([json.loads(line) for line in lines if line.strip()], weights)
         (RESULTS_DIR / f"{args.tune}_scope_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
-        print(json.dumps({k: summary[k] for k in ("filter", "boost_no_bonus", "chosen")}, indent=2))
+        print(json.dumps({k: v for k, v in summary.items() if k != "grid"}, indent=2))
     if not (args.dump or args.tune):
         parser.error("--dump NAME and/or --tune NAME")
 

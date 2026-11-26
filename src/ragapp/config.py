@@ -71,8 +71,8 @@ FILTER_BY_QUESTION_YEAR = os.getenv("FILTER_BY_QUESTION_YEAR", "1") == "1"
 # How the question's scope (the asker's year/block, or the block the question names or "next block" points to;
 # see retrieve.filter_for) is used, for every question alike:
 #   "filter" search only the scope + shared pages (since experiment 2)
-#   "boost"  search everything AND the scope's own pages, merge, rerank, then add a bonus to pages in the scope
-#            (scores scaled 0-1 per question first). Nothing is filtered out, so shared pages can still win.
+#   "boost"  that search AND one over the scope's own pages only, merge, rerank, then add a bonus to pages in the
+#            scope (scores scaled 0-1 per question first). Shared pages get no bonus and no penalty.
 SCOPE_MODE = os.getenv("SCOPE_MODE", "filter")
 SCOPE_BOOST_BLOCK = float(os.getenv("SCOPE_BOOST_BLOCK", "0.2"))  # page in the scope's year and block
 SCOPE_BOOST_YEAR = float(os.getenv("SCOPE_BOOST_YEAR", "0.0"))    # page in the scope's year

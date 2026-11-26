@@ -1,9 +1,9 @@
 """SCOPE_MODE=boost: the question's scope (the asker's year/block, or the block the question names or points to
-with "next block") is a bonus in the ranking, never a filter.
+with "next block") gets a bonus in the ranking, on top of today's filter (scope + shared pages).
 
-One mechanism for every question: search everything AND the scope's own pages, merge, rerank, then add
-w_block / w_year to pages in the scope. Shared pages are never removed, so they still win when they are the better
-match. No Ollama, Qdrant or course data needed.
+One mechanism for every question: today's search AND a search over the scope's own pages (so they are candidates
+even when shared pages fill the first list), merge, rerank, then add w_block / w_year to pages in the scope.
+Shared pages are never removed, so they still win when clearly better. No Ollama, Qdrant or course data needed.
 """
 
 from datetime import date
@@ -71,12 +71,12 @@ def test_filter_mode_searches_as_before(recorded):
     assert recorded == [("dense", "Year2", ["BlockC"], True)] * 2 + [("bm25", "Year2", ["BlockC"], True)] * 2
 
 
-def test_boost_mode_searches_everything_and_the_scope(recorded, monkeypatch):
+def test_boost_mode_adds_a_search_over_the_scopes_own_pages(recorded, monkeypatch):
     monkeypatch.setattr(config, "SCOPE_MODE", "boost")
     retrieve.retrieve_many(["q1", "q2"], 5, "what do we have next block?", "Year2", "BlockB", TODAY)
-    scoped = ("Year2", ["BlockC"], False)
-    assert same(recorded, [("dense", None, None, True)] * 2 + [("bm25", None, None, True)] * 2
-                + [("dense", *scoped)] * 2 + [("bm25", *scoped)] * 2)
+    with_shared, own = ("Year2", ["BlockC"], True), ("Year2", ["BlockC"], False)
+    assert same(recorded, [("dense", *with_shared)] * 2 + [("bm25", *with_shared)] * 2
+                + [("dense", *own)] * 2 + [("bm25", *own)] * 2)
 
 
 def test_boost_mode_scope_is_the_askers_own_block_without_a_block_in_the_question(recorded, monkeypatch):
@@ -94,7 +94,7 @@ def test_boost_mode_without_any_scope_is_one_open_search(recorded, monkeypatch):
 def test_single_query_retrieve_uses_the_same_searches(recorded, monkeypatch):
     monkeypatch.setattr(config, "SCOPE_MODE", "boost")
     retrieve.retrieve("Year 1 Block C overview", 5, "Year2", "BlockB", TODAY)
-    assert same(recorded, [("dense", None, None, True), ("bm25", None, None, True),
+    assert same(recorded, [("dense", "Year1", ["BlockC"], True), ("bm25", "Year1", ["BlockC"], True),
                            ("dense", "Year1", ["BlockC"], False), ("bm25", "Year1", ["BlockC"], False)])
 
 
