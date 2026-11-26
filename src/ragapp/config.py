@@ -27,7 +27,7 @@ EMBED_MODEL = "qwen3-embedding:0.6b"
 # The answering LLM (answers and query rewriting): "ollama" = local GPU, "buas" = the BUas LLM server
 # (an OpenAI-compatible API hosted for BUas students; needs BUAS_LLM_BASE_URL and BUAS_LLM_API_KEY in .env).
 LLM_BACKEND = os.getenv("LLM_BACKEND", "ollama")
-LLM_MODEL = os.getenv("LLM_MODEL", "qwen3:8b" if LLM_BACKEND == "ollama" else "Qwen3.6-27B")
+LLM_MODEL = os.getenv("LLM_MODEL", "qwen3:8b" if LLM_BACKEND == "ollama" else "qwen3.8-27b")
 BUAS_LLM_BASE_URL = os.getenv("BUAS_LLM_BASE_URL", "")
 BUAS_LLM_API_KEY = os.getenv("BUAS_LLM_API_KEY", "")
 # The eval's local judge stays the same model whatever answers, so correctness numbers stay comparable.
