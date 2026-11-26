@@ -8,12 +8,15 @@ uv run python evals/run_eval.py --name my_run                                   
 uv run python evals/run_eval.py --name my_run --golden evals/golden_student.jsonl   # student-style dev split
 uv run python evals/rejudge.py my_run      # re-grade saved answers after a judge change (no new search/generation)
 uv run python evals/score.py my_run        # agreement with the strong judge's grades, if present
+uv run python evals/groups.py              # how many questions per question type x segment (empty cells included)
+uv run python evals/groups.py --run my_run # a saved dev run's numbers per question type and segment
 ```
 
 | File | What |
 |---|---|
 | `run_eval.py` | runs the full pipeline per question; writes `results/<run>.jsonl` and `results/<run>_summary.json` |
 | `rejudge.py` | re-grades saved runs under the current judge rules |
+| `groups.py` | coverage (questions per question type x segment) and a saved dev run's numbers per group |
 | `score.py` | judge agreement (Cohen's kappa) and chunk-level evidence from saved runs |
 | `judge_rubric.md` | rubric for the strong judge (correctness, faithfulness, citations) |
 | `golden_set.example.jsonl` | the question-file format |
@@ -336,4 +339,60 @@ that run and `clean` give identical retrieval: 64% / 89% page-style, 33% / 47% s
   of its dev advantage is selection on that split. This is what the held-out split is for.
 - **Disclosure:** some test questions were read in the Phase 2 start run, before the split was made. No change was
   made from per-question test results.
+
+## Phase 3, step 1: results per question type and segment
+
+Every question now carries two labels:
+- **question type**, hand-labelled from the question text only (no results looked at): schedule, deadline, overview,
+  rules, how-to, concept, people, out of scope. A question that asks two things gets the riskier label
+  (deadline > rules > the rest). Every unanswerable question is "out of scope".
+- **segment**, computed from the year/block metadata of the answer's source pages: a block (e.g. "Year2 BlockB"),
+  "shared" (pages of no year), "several", or "none" (unanswerable).
+
+Development runs now report every group separately; test runs stay totals only (enforced in `run_eval.py`).
+
+**Coverage** (dev/test question counts; `-` = no question):
+
+| type | Year1 BlockA | Year1 BlockC | Year2 BlockA | Year2 BlockB | Year2 BlockD | Year3 Semester1 | shared | several | none |
+|---|---|---|---|---|---|---|---|---|---|
+| schedule | - | - | - | 4/1 | - | - | - | - | - |
+| deadline | 1/0 | - | 0/1 | 1/3 | - | 0/1 | 0/1 | 0/1 | - |
+| overview | - | 1/0 | - | 1/1 | - | 1/1 | 1/0 | 3/2 | - |
+| rules | - | - | - | 5/3 | 1/0 | - | 6/4 | 1/1 | - |
+| howto | - | - | - | 1/0 | - | 0/1 | 8/5 | 1/1 | - |
+| concept | - | - | 0/1 | - | - | - | 9/11 | - | - |
+| people | - | - | - | - | - | - | - | - | - |
+| out of scope | - | - | - | - | - | - | - | - | 6/5 |
+
+Columns with no question at all are left out: Year 1 Block B and D, Year 2 Block C, Year 3 Semester 2, and the
+year-level pages. So 8 of the 14 parts of the site have no development question, all schedule questions are
+about one block, there are 2 development deadline questions, and none asks for a person or contact. This is why the
+week lookup looked fine while working for 1 block out of 10.
+
+**Baseline per group**: the current default (hybrid + ColBERT), from the saved development runs, no new run needed:
+
+| Question type | Page-style: n, right page in top 5, correct | Student-style: n, right page in top 5, correct |
+|---|---|---|
+| schedule | - | **4, 0%, 0%** |
+| deadline | 1, 100%, 100% | 1, 100%, 0% |
+| overview | 5, 100%, 40% | 2, 100%, 0% |
+| rules | 8, 100%, 75% | **5, 40%, 20%** |
+| howto | 6, 100%, 50% | 4, 100%, 25% |
+| concept | 8, 100%, 38% | 1, 100%, 100% |
+| out of scope (refused) | 3 of 4 | 2 of 2 |
+
+| Segment | n | right page in top 5 | all evidence @5 | correct |
+|---|---|---|---|---|
+| shared (page / student) | 21 / 3 | 100% / 100% | 62% / 67% | 52% / 67% |
+| Year 2 Block B (student) | 12 | **42%** | **17%** | **8%** |
+| several | 3 / 2 | 100% / 100% | 100% / 0% | 67% / 0% |
+| other blocks | 1 each | | | |
+
+- **Schedule questions fail completely** (4 of 4): no right page in the top 5, no correct answer. This is the case for
+  the calendar route.
+- **Rules questions asked the student way fail too**: 2 of 5 find the right page, against 8 of 8 when phrased like the
+  page. Short phrasing ("is using llm allowed") is the problem, not the topic.
+- **Retrieval is solved for shared pages** (100% right page in the top 5); what is left there is the chunk and the
+  answer (evidence 62%, correct about half, local judge).
+- Most cells have 1-5 questions, so these numbers show where to look, not how big a difference is.
 

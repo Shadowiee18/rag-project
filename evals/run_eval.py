@@ -24,6 +24,8 @@ from ragapp.documents import load_documents
 from ragapp.rag import answer as rag_answer
 from ragapp.student import StudentContext, describe
 
+from groups import group_summary, segment
+
 EVALS_DIR = Path(__file__).resolve().parent
 GOLDEN_PATH = EVALS_DIR / "golden_set.jsonl"
 RESULTS_DIR = EVALS_DIR / "results"
@@ -240,6 +242,9 @@ def main() -> None:
     items = items[: args.limit]
     corpus = load_documents(config.CORPUS_PATH)
     page_years = {doc.id: doc.metadata.get("year", "") for doc in corpus}
+    page_meta = {doc.id: (doc.metadata.get("year", ""), doc.metadata.get("block", "")) for doc in corpus}
+    for item in items:
+        item["segment"] = segment(item["source_ids"], page_meta)  # where the answer lives (see groups.py)
     if config.CLEAN_CORPUS:
         DUPLICATE_OF.update(clean(corpus).duplicate_of)
 
@@ -258,6 +263,9 @@ def main() -> None:
     summary = summarise(results, args.user_year)
     summary["config"]["split"] = args.split
     summary["config"]["golden"] = Path(args.golden).name
+    if args.split == "dev":  # per-group numbers only where failures may be inspected; test stays totals only
+        summary["by_question_type"] = group_summary(results, "question_type")
+        summary["by_segment"] = group_summary(results, "segment")
     (RESULTS_DIR / f"{args.name}_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     print(json.dumps(summary, indent=2))
 

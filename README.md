@@ -103,12 +103,15 @@ the reranker's gain at almost no cost.
 - **Answer metrics**: a local LLM judge grades correct / partial / wrong against the expected answer. A stronger model
   graded the same answers blind with a written rubric: 76% the same label (Cohen's kappa 0.57). Correctness numbers
   are treated as rough; retrieval numbers are exact.
+- **Results per group**: every question is labelled with a question type (schedule, deadline, overview, rules, how-to,
+  concept, people, out of scope) and a segment (the year/block its answer lives in, computed from the source pages), and
+  development runs report each group separately. An average over everything hides where the system fails.
 - **Noise floor**: one question is 3.6 points (page) or 6.7 points (student) on the development split. A difference is
   called real only when it spans several questions.
 - **The eval was reviewed too**: a review found three bugs in the eval code (judge label parsing, partial refusals,
   and the app and eval merging result lists of different depth). Each got a failing test, a fix, and all 52 saved
   runs were re-graded from their saved answers.
-- **CI**: 69 unit tests on every pull request. They need no LLM, database or course data: the models are faked.
+- **CI**: 72 unit tests on every pull request. They need no LLM, database or course data: the models are faked.
 
 ## Known limitations
 
@@ -117,8 +120,9 @@ the reranker's gain at almost no cost.
   entries in code and lets the LLM only phrase the answer.
 - **The week lookup** reads one page format; it currently works for 1 of 10 blocks. Generalising it is part of the
   next phase.
-- **Small evaluation sets** (28 and 15 answerable questions on development): differences of one or two questions are
-  noise.
+- **Small and lopsided evaluation sets** (28 and 15 answerable questions on development): differences of one or two
+  questions are noise, and the questions cover mostly Year 2 Block B and the shared pages. 8 of the 14 parts of the site
+  (blocks, semesters, year pages and shared pages) have no development question, and none asks for a person or contact.
 - **The test split was partly seen**: some test questions were read in an early run, before the split was made.
 - **Answer correctness is judged by LLMs** only; no human labels yet. The local judge also changes about 1 in 100
   labels when the same answer is graded twice.
