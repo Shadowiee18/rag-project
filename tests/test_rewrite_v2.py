@@ -22,18 +22,13 @@ def test_rrf_respects_k_and_keeps_one_copy_per_chunk():
     assert [(c["doc_id"], c["chunk_index"]) for c in merged] == [("X", 0), ("X", 1)]
 
 
-class _Fake:
-    def __init__(self, text):
-        self.message = type("m", (), {"content": text})
-
-
 def test_expand_strips_year_block_week_the_model_adds(monkeypatch):
-    monkeypatch.setattr(rewrite.ollama, "chat", lambda **kw: _Fake("Year 2 Block B week 3 Keras backend TensorFlow"))
+    monkeypatch.setattr(rewrite.llm, "chat", lambda messages: "Year 2 Block B week 3 Keras backend TensorFlow")
     assert rewrite.expand_query("keras backend") == "Keras backend TensorFlow"
 
 
 def test_expand_keeps_year_block_the_question_itself_names(monkeypatch):
-    monkeypatch.setattr(rewrite.ollama, "chat", lambda **kw: _Fake("Year 2 Block A data quality report deadline"))
+    monkeypatch.setattr(rewrite.llm, "chat", lambda messages: "Year 2 Block A data quality report deadline")
     assert "Block A" in rewrite.expand_query("deadline data quality report year 2 block a")
 
 

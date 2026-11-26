@@ -6,9 +6,32 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 CORPUS_PATH = PROJECT_ROOT / "data" / "raw" / "adsai_pages.jsonl"
 
-# Ollama (runs locally on http://localhost:11434)
+
+def load_env_file(path: Path) -> None:
+    """Read KEY=VALUE lines from a .env file into the environment. A variable that is already set wins.
+    (A few lines instead of the python-dotenv package.)"""
+    if not path.exists():
+        return
+    for line in path.read_text(encoding="utf-8").splitlines():
+        key, sep, value = line.partition("=")
+        if sep and key.strip() and not key.strip().startswith("#"):
+            os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+
+
+# Secrets (the BUas LLM server's address and key) live in the git-ignored .env file.
+load_env_file(PROJECT_ROOT / ".env")
+
+# Ollama (runs locally on http://localhost:11434): embeddings always, the answering LLM when LLM_BACKEND=ollama
 EMBED_MODEL = "qwen3-embedding:0.6b"
-LLM_MODEL = "qwen3:8b"
+
+# The answering LLM (answers and query rewriting): "ollama" = local GPU, "buas" = the BUas LLM server
+# (an OpenAI-compatible API hosted for BUas students; needs BUAS_LLM_BASE_URL and BUAS_LLM_API_KEY in .env).
+LLM_BACKEND = os.getenv("LLM_BACKEND", "ollama")
+LLM_MODEL = os.getenv("LLM_MODEL", "qwen3:8b" if LLM_BACKEND == "ollama" else "Qwen3.6-27B")
+BUAS_LLM_BASE_URL = os.getenv("BUAS_LLM_BASE_URL", "")
+BUAS_LLM_API_KEY = os.getenv("BUAS_LLM_API_KEY", "")
+# The eval's local judge stays the same model whatever answers, so correctness numbers stay comparable.
+JUDGE_MODEL = "qwen3:8b"
 
 # Qdrant (started with `docker compose up -d`)
 QDRANT_URL = "http://localhost:6333"

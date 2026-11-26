@@ -10,9 +10,7 @@ The original question is still what the answering LLM sees; only the search uses
 
 import re
 
-import ollama
-
-from ragapp import config
+from ragapp import llm
 from ragapp.resolver import block_ref_in_question
 from ragapp.retrieve import year_block_in_question
 from ragapp.student import StudentContext, search_phrase
@@ -65,13 +63,8 @@ def rewrite_query(question: str, context: str) -> str:
         examples=WITH_CONTEXT_EXAMPLES if context else NO_CONTEXT_EXAMPLES,
         question=question,
     )
-    response = ollama.chat(
-        model=config.LLM_MODEL,
-        messages=[{"role": "user", "content": prompt}],
-        think=False,
-        options={"temperature": 0, "num_ctx": 8192},  # same num_ctx as generate.py, so the model isn't reloaded
-    )
-    query = response.message.content.strip().splitlines()[0].strip() if response.message.content.strip() else ""
+    text = llm.chat([{"role": "user", "content": prompt}])
+    query = text.splitlines()[0].strip() if text else ""
     return query or question
 
 
@@ -106,13 +99,7 @@ CONTEXT_WORDS = re.compile(r"\b(year\s*\d|block\s*[a-d]|semester\s*\d|week\s*\d+
 
 def expand_query(question: str) -> str:
     """LLM: expand vague words only. Code: remove any year/block/week the model adds anyway."""
-    response = ollama.chat(
-        model=config.LLM_MODEL,
-        messages=[{"role": "user", "content": EXPAND_PROMPT.format(question=question)}],
-        think=False,
-        options={"temperature": 0, "num_ctx": 8192},
-    )
-    text = response.message.content.strip()
+    text = llm.chat([{"role": "user", "content": EXPAND_PROMPT.format(question=question)}])
     expanded = text.splitlines()[0].strip() if text else ""
     if not CONTEXT_WORDS.search(question):
         expanded = " ".join(CONTEXT_WORDS.sub(" ", expanded).split())

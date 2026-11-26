@@ -39,15 +39,10 @@ def test_build_prompt_adds_student_line_before_question():
     assert prompt.endswith("Student: Today is Tuesday 24 November 2026.\n\nQuestion: whats due")
 
 
-class _FakeResponse:
-    class message:
-        content = "some query"
-
-
 def test_rewrite_drops_student_context_when_question_names_a_block(monkeypatch):
     """The model once rewrote 'year 2 block a' into the student's own Block B. The code prevents that."""
     seen = {}
-    monkeypatch.setattr(rewrite.ollama, "chat", lambda **kw: seen.update(kw) or _FakeResponse())
+    monkeypatch.setattr(rewrite.llm, "chat", lambda messages: seen.update(messages=messages) or "some query")
 
     rewrite.rewrite_query("deadline data quality report year 2 block a", "The student is in Year 2, Block B.")
     assert "Block B" not in seen["messages"][0]["content"]
