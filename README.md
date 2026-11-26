@@ -118,8 +118,8 @@ the reranker's gain at almost no cost.
 - **Date questions** ("do I have lectures tomorrow?", "when is the next lecture?") fail. The right schedule chunk is
   hard to retrieve, and an 8B model compares dates unreliably. Next step: a calendar route that reads the dated
   entries in code and lets the LLM only phrase the answer.
-- **The week lookup** reads one page format; it currently works for 1 of 10 blocks. Generalising it is part of the
-  next phase.
+- **The current week and "next block"** now come from the official year calendar for every year and block (Phase 3),
+  but the evaluation set has no question about another block yet, so that gain is covered by unit tests only.
 - **Small and lopsided evaluation sets** (28 and 15 answerable questions on development): differences of one or two
   questions are noise, and the questions cover mostly Year 2 Block B and the shared pages. 8 of the 14 parts of the site
   (blocks, semesters, year pages and shared pages) have no development question, and none asks for a person or contact.

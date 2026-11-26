@@ -399,3 +399,28 @@ week lookup looked fine while working for 1 block out of 10.
   answer (evidence 62%, correct about half, local judge).
 - Most cells have 1-5 questions, so these numbers show where to look, not how big a difference is.
 
+## Phase 3, step 4: search filter and student week from the calendar
+
+Step 2 added the official 2026-27 year calendar and a resolver. Step 4 uses them in the pipeline:
+- **Search filter**: "next / last block" is resolved from the student's block and the calendar (Year 1 Block D →
+  Year 2 Block A), and block names map to the folders each year uses (Year 3 has semesters). Before, a "next block"
+  question searched the student's own block.
+- **Student context**: the week number and its dates come from the calendar for every year and block; holidays and
+  closed days are named. Before, the week was read from one block page's timeline format (1 of 10 blocks).
+- The query rewrite adds no current-week phrase to "next block" questions.
+
+**Regression check** (dev, default config, against the same config before the change):
+
+| Set | Same search queries | Same retrieved pages | hit@1 | hit@5 | all evidence @5 | correct |
+|---|---|---|---|---|---|---|
+| page (32) | 32 / 32 | 32 / 32 | 86% → 86% | 100% → 100% | 71% → 71% | 54% → 54% |
+| student (19) | 19 / 19 | 19 / 19 | 41% → 41% | 59% → 59% | 24% → 24% | 18% → 18% |
+
+- **Nothing moved, as expected**: no dev question asks about another block, and for the eval's Year 2 Block B dates the
+  calendar gives the same week the page did. The check confirms the new wiring changes nothing it should not.
+- **Median time rose 0.5-0.8 s, but not because of this change**: the new code takes under 2 ms per question, and the
+  answer-generation step, whose prompts were identical, got 0.3 s slower as well. Run-to-run machine variation.
+- **The gain is not measurable on this eval set.** "What do we have next block" and other blocks' weeks are covered by
+  unit tests (including directional ones: changing the block must change the filter). Measuring it end to end needs
+  the behavioural suite of step 3.
+
