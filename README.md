@@ -126,7 +126,8 @@ the reranker's gain at almost no cost.
   teaching day of every block (60/60, was 13/60), but in a holiday the model often still names a week (12/30 right),
   it computes other weeks' dates itself and gets them wrong (6/20), and a "next / last block" question finds that
   block's page first in only 2 of 18 cases: shared pages outrank it. Next steps: the calendar route answers these in
-  code, and block questions search the resolved block's own pages.
+  code, and block questions search the resolved block's own pages. A 27B model on the BUas LLM service gives far fewer
+  wrong answers on these questions (5 of 117 against 28) but says "I don't know" more often (44 against 10).
 - **Small and lopsided evaluation sets** (28 and 15 answerable questions on development): differences of one or two
   questions are noise, and the questions cover mostly Year 2 Block B and the shared pages. 8 of the 14 parts of the site
   (blocks, semesters, year pages and shared pages) have no development question, and none asks for a person or contact.
@@ -181,12 +182,17 @@ Settings live in [src/ragapp/config.py](src/ragapp/config.py); the main ones can
 | `RERANK_CANDIDATES` | `30` | chunks the reranker re-sorts |
 | `QUERY_REWRITE` | `2` | `0`: off |
 | `CLEAN_CORPUS` | `1` | `0`: index the raw pages (re-ingest needed) |
+| `LLM_BACKEND` | `ollama` | `buas`: the answering LLM runs on the BUas LLM service (OpenAI-compatible API) |
+| `LLM_MODEL` | `qwen3:8b` | with `buas`: a model the service offers, default `qwen3.8-27b` |
+
+`LLM_BACKEND=buas` reads `BUAS_LLM_BASE_URL` and `BUAS_LLM_API_KEY` from a git-ignored `.env` file in the project
+folder (the BUas service needs the campus network or VPN). Embeddings and the eval judge stay local either way.
 
 ## Stack
 
 | Part | Choice |
 |---|---|
-| LLM | `qwen3:8b` (4-bit) via Ollama |
+| LLM | `qwen3:8b` (4-bit) via Ollama, or a BUas-hosted model (`qwen3.8-27b`) via its OpenAI-compatible API |
 | Embeddings | `qwen3-embedding:0.6b`, 1024 dimensions, via Ollama |
 | Vector database | Qdrant 1.20 in Docker: dense, sparse (BM25) and multi-vector (ColBERT) collections |
 | Rerankers | fastembed (ONNX Runtime, CPU): `answerai-colbert-small-v1`, `bge-reranker-base` |

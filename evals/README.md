@@ -468,3 +468,38 @@ What the failures say (read on the answers, all segments):
   "what do we have next block?" those rank first. The fix is general, not per question: an overview question about a
   resolved block should search that block's own pages (and its year/block words), not the shared ones.
 
+## Phase 3: a larger answering model (BUas LLM service) on the behavioural suite
+
+BUas offers students an LLM service with an OpenAI-compatible API (on its own servers). `LLM_BACKEND=buas` sends the
+answer and query-rewrite calls there; embeddings, reranking and the search index stay local. Same suite, same day,
+step 4 code; the only change is the answering model: local `qwen3:8b` (4-bit) against `qwen3.8-27b` on the service
+(the only chat model the account offered that day).
+
+Scored as before (exact match) and, because a wrong date costs a student more than "I don't know", also split into
+right / wrong / abstained for the 117 cases with an answer to read (the CRAG score: +1 right, -1 wrong, 0 abstained):
+
+| | Exact match (135) | Right | Wrong | Abstained | CRAG score |
+|---|---|---|---|---|---|
+| before step 4, `qwen3:8b` | 14 (10%) | 14 | 83 | 20 | -0.59 |
+| step 4, `qwen3:8b` | 81 (60%) | 79 | 28 | 10 | +0.44 |
+| step 4, `qwen3.8-27b` | 71 (53%) | 68 | **5** | 44 | **+0.54** |
+
+| Family (right / wrong / abstained) | `qwen3:8b` | `qwen3.8-27b` |
+|---|---|---|
+| Which week, teaching days (60) | 60 / 0 / 0 | 60 / 0 / 0 |
+| Which week, breaks (30) | 12 / 17 / 1 | 7 / 5 / 18 |
+| Dates of week N (20) | 6 / 6 / 8 | 1 / 0 / 19 |
+| Next block starts (7) | 1 / 5 / 1 | 0 / 0 / 7 |
+| DIR next + last block, top result (18) | 2 | 3 |
+
+- **The larger model is more honest, not more knowing.** It invents almost no week numbers or dates (5 wrong against
+  28), but the facts it would need are still not in its prompt, so it abstains instead. On the questions where the
+  answer IS in the prompt (the current week), both are perfect.
+- **It ignores the holiday line.** The student line says "This week is the Christmas holiday", yet the 27B model
+  answers "the context does not contain a calendar". The system prompt tells the model to use ONLY the numbered
+  passages, and the larger model follows that rule more strictly; the student line is not a numbered passage. A
+  general prompt fix (the student line counts as a source) is its own experiment, measured on both models.
+- **Search changed too**: query rewriting also uses the answering LLM, so only 15 of 135 cases retrieved the same top 5
+  pages. "Next / last block" is still a search problem (2 → 3 of 18), not a model problem.
+- Model choice: not changed yet. The 27B model is the safer one (fewest wrong answers); the 8B scores higher on exact
+  match because it guesses, and sometimes guesses right.
