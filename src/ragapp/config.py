@@ -68,6 +68,14 @@ BM25_MODEL = "Qdrant/bm25"  # 0.01 GB: tokenizer, English stemmer and stopwords;
 # plus pages that belong to no year (all the shared Study Content).
 # On by default since experiment 2 (see README results).
 FILTER_BY_QUESTION_YEAR = os.getenv("FILTER_BY_QUESTION_YEAR", "1") == "1"
+# How the question's scope (the asker's year/block, or the block the question names or "next block" points to;
+# see retrieve.filter_for) is used, for every question alike:
+#   "filter" search only the scope + shared pages (since experiment 2)
+#   "boost"  search everything AND the scope's own pages, merge, rerank, then add a bonus to pages in the scope
+#            (scores scaled 0-1 per question first). Nothing is filtered out, so shared pages can still win.
+SCOPE_MODE = os.getenv("SCOPE_MODE", "filter")
+SCOPE_BOOST_BLOCK = float(os.getenv("SCOPE_BOOST_BLOCK", "0.2"))  # page in the scope's year and block
+SCOPE_BOOST_YEAR = float(os.getenv("SCOPE_BOOST_YEAR", "0.0"))    # page in the scope's year
 
 # Rewrite the question before searching (see rewrite.py):
 #   "0" off | "1" v1, LLM writes one query (rejected by the eval) | "2" v2, LLM expansion + student week, multi-query + RRF

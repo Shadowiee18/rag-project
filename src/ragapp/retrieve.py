@@ -72,11 +72,55 @@ def retrieve(
     for "next block"; see filter_for. Pages with no year/block always stay searchable."""
     year, blocks = filter_for(question, user_year, user_block, today)
     query_vector = embed([question])[0]
-    if not config.HYBRID:
+    if not config.HYBRID and config.SCOPE_MODE != "boost":
         return search(get_client(), query_vector, k, year=year, blocks=blocks)
     depth = max(k, FUSION_DEPTH)
-    dense = search(get_client(), query_vector, depth, year=year, blocks=blocks)
-    return rrf_merge([dense, bm25_search(question, depth, year, blocks)], k)  # meaning + exact words
+    return rrf_merge(search_lists(get_client(), [query_vector], [question], depth, year, blocks), k)
+
+
+def search_lists(client, vectors: list, queries: list[str], depth: int, year: str | None, blocks: list[str] | None) -> list:
+    """The result lists to merge: a vector search per query (+ BM25 per query with HYBRID), for each scope.
+
+    SCOPE_MODE "filter": one scope, the year/block plus shared pages.
+    SCOPE_MODE "boost": everything (no year/block filter), and the scope's own pages (no shared ones), so the
+    scope's pages are candidates even in a large corpus; scope_boost then decides the order.
+    """
+    if config.SCOPE_MODE == "boost":
+        scopes = [(None, None, True)] + ([(year, blocks, False)] if year else [])
+    else:
+        scopes = [(year, blocks, True)]
+    lists = []
+    for scope_year, scope_blocks, shared in scopes:
+        lists += [search(client, v, depth, year=scope_year, blocks=scope_blocks, shared=shared) for v in vectors]
+        if config.HYBRID:
+            lists += [bm25_search(q, depth, scope_year, scope_blocks, shared) for q in queries]
+    return lists
+
+
+def _as_list(value) -> list:
+    return value if isinstance(value, list) else [value]
+
+
+def scope_boost(
+    chunks: list[dict], year: str | None, blocks: list[str] | None, w_block: float, w_year: float
+) -> list[dict]:
+    """Re-sort chunks by their score scaled to 0-1 within this question (min-max), plus w_year for a page of the
+    scope's year and w_block for a page of its year AND one of its blocks. Shared pages get no bonus and no penalty.
+
+    Scaling first makes one weight fit every question: ColBERT scores grow with the question's length.
+    """
+    if not year or not chunks:
+        return chunks
+    scores = [c["score"] for c in chunks]
+    low, span = min(scores), (max(scores) - min(scores)) or 1.0
+
+    def bonus(chunk: dict) -> float:
+        in_year = year in _as_list(chunk.get("year", ""))
+        in_block = in_year and bool(blocks) and any(b in _as_list(chunk.get("block", "")) for b in blocks)
+        return w_year * in_year + w_block * in_block
+
+    boosted = [{**c, "score": (c["score"] - low) / span + bonus(c)} for c in chunks]
+    return sorted(boosted, key=lambda c: -c["score"])
 
 
 RRF_K = 60  # the usual constant: dampens how much rank 1 beats rank 2
@@ -110,10 +154,6 @@ def retrieve_many(
     """Search with several queries and merge with RRF. The filter is decided from the ORIGINAL question,
     so a rewrite can't change which block is searched. With HYBRID, every query also gets a BM25 search."""
     year, blocks = filter_for(question, user_year, user_block, today)
-    client = get_client()
     vectors = embed(queries)  # one batch call for all queries
     depth = max(2 * k, FUSION_DEPTH)
-    lists = [search(client, v, depth, year=year, blocks=blocks) for v in vectors]
-    if config.HYBRID:
-        lists += [bm25_search(q, depth, year, blocks) for q in queries]
-    return rrf_merge(lists, k)
+    return rrf_merge(search_lists(get_client(), vectors, queries, depth, year, blocks), k)

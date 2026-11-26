@@ -221,6 +221,7 @@ def summarise(results: list[dict], user_year_mode: str) -> dict:
             "judge_model": config.JUDGE_MODEL,
             "chunk_size": config.CHUNK_SIZE, "chunk_overlap": config.CHUNK_OVERLAP, "top_k": config.TOP_K,
             "chunk_headers": config.CHUNK_HEADERS, "filter_by_question_year": config.FILTER_BY_QUESTION_YEAR,
+            "scope_mode": config.SCOPE_MODE, "scope_boost_block": config.SCOPE_BOOST_BLOCK, "scope_boost_year": config.SCOPE_BOOST_YEAR,
             "query_rewrite": config.QUERY_REWRITE, "user_year": user_year_mode,
             "collection": config.COLLECTION, "clean_corpus": config.CLEAN_CORPUS, "exclude_templates": config.EXCLUDE_TEMPLATES,
             "rerank_model": config.RERANK_MODEL, "rerank_candidates": config.RERANK_CANDIDATES if config.RERANK_MODEL else None,
