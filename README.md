@@ -104,7 +104,7 @@ the reranker's gain at almost no cost.
   graded the same answers blind with a written rubric: 76% the same label (Cohen's kappa 0.57). Correctness numbers
   are treated as rough; retrieval numbers are exact.
 - **Results per group**: every question is labelled with a question type (schedule, deadline, overview, rules, how-to,
-  concept, people, out of scope) and a segment (the year/block its answer lives in, computed from the source pages), and
+  concept, people, out of scope; labelled by an LLM, not reviewed by a person) and a segment (the year/block its answer lives in, computed from the source pages), and
   development runs report each group separately. An average over everything hides where the system fails.
 - **Noise floor**: one question is 3.6 points (page) or 6.7 points (student) on the development split. A difference is
   called real only when it spans several questions.

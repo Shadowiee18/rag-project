@@ -343,9 +343,12 @@ that run and `clean` give identical retrieval: 64% / 89% page-style, 33% / 47% s
 ## Phase 3, step 1: results per question type and segment
 
 Every question now carries two labels:
-- **question type**, hand-labelled from the question text only (no results looked at): schedule, deadline, overview,
-  rules, how-to, concept, people, out of scope. A question that asks two things gets the riskier label
+- **question type**, labelled by an LLM from the question text only (no results looked at): schedule, deadline,
+  overview, rules, how-to, concept, people, out of scope. A question that asks two things gets the riskier label
   (deadline > rules > the rest). Every unanswerable question is "out of scope".
+  **Not reviewed by a person.** Checking every label by hand does not scale, so the check is automatic: the question
+  router (step 9) labels every question independently, and only the questions where the two labels disagree are
+  reviewed. That also gives an estimate of the label error rate.
 - **segment**, computed from the year/block metadata of the answer's source pages: a block (e.g. "Year2 BlockB"),
   "shared" (pages of no year), "several", or "none" (unanswerable).
 
