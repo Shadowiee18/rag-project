@@ -42,7 +42,7 @@ def pipeline(monkeypatch):
     monkeypatch.setattr(config, "TRACE_CONTENT", False)
     monkeypatch.setattr(rag, "retrieve_many", lambda *args, **kwargs: list(found))
     monkeypatch.setattr(rag, "rerank", lambda question, chunks: list(reversed(chunks)))
-    monkeypatch.setattr(rag, "generate", lambda question, chunks, context: "Block C covers deep learning [1].")
+    monkeypatch.setattr(rag, "generate", lambda question, chunks, context, calendar=(): "Block C covers deep learning [1].")
     monkeypatch.setattr(rag, "describe", lambda student, **kwargs: "Today is Thursday.")
     return lambda: rag.answer(QUESTION, k=2, student=STUDENT)
 
@@ -110,7 +110,7 @@ def test_question_and_answer_with_trace_content_on(pipeline, monkeypatch):
 
 
 def test_a_failing_step_is_marked_as_an_error(pipeline, monkeypatch):
-    def broken(question, chunks, context):
+    def broken(question, chunks, context, calendar=()):
         raise RuntimeError("BUas LLM server: 503")
 
     monkeypatch.setattr(rag, "generate", broken)
@@ -124,6 +124,22 @@ def test_boost_mode_shows_its_own_step(pipeline, monkeypatch):
     monkeypatch.setattr(config, "SCOPE_MODE", "boost")
     pipeline()
     assert "scope_boost" in spans()
+
+
+def test_calendar_step_shows_the_facts_given_to_the_model(pipeline, monkeypatch):
+    """The facts come from the calendar file, not from the user: recorded even with TRACE_CONTENT off."""
+    monkeypatch.setattr(config, "CALENDAR_FACTS", True)
+    result = pipeline()
+    found = spans()
+    assert found["calendar"].parent.span_id == found["answer"].context.span_id
+    facts = json.loads(found["calendar"].attributes["langfuse.observation.output"])
+    assert facts == result["calendar"] and any("Next block = Year 2 Block C" in f for f in facts)
+    assert found["calendar"].attributes["langfuse.observation.metadata.facts"] == len(facts)
+
+
+def test_no_calendar_step_with_the_switch_off(pipeline):
+    result = pipeline()
+    assert "calendar" not in spans() and result["calendar"] == []
 
 
 # ---------------------------------------------------------------- setup

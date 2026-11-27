@@ -197,6 +197,36 @@ def score_retrieval(target: list[str], chunks: list[dict]) -> bool:
     return target[0] in _as_list(top.get("year", "")) and target[1] in _as_list(top.get("block", ""))
 
 
+def outcome(result: dict) -> str | None:
+    """right / wrong / abstained for a case with an answer to read (None for the DIR search checks).
+    A failed case is "wrong" when the answer names a week (week family) or a date (date families): it committed to
+    an answer. Otherwise it abstained ("I don't know", "the context has no calendar"). Wrong costs a student more
+    than abstaining, so the CRAG score counts +1 / -1 / 0."""
+    if "target" in result["gold"]:
+        return None
+    if result["passed"]:
+        return "right"
+    named = extract_weeks(result["answer"]) if result["family"] == "week" else extract_dates(result["answer"])
+    return "wrong" if named else "abstained"
+
+
+def right_wrong_abstained(results: list[dict]) -> dict:
+    """Per family (the week family split into teaching days and breaks), and the total with its CRAG score."""
+    rows: dict[str, dict] = defaultdict(lambda: {"right": 0, "wrong": 0, "abstained": 0})
+    for r in results:
+        if (kind := outcome(r)) is None:
+            continue
+        family = r["family"]
+        if family == "week":
+            family = "week (breaks)" if "break" in r["gold"] else "week (teaching days)"
+        rows[family][kind] += 1
+        rows["total"][kind] += 1
+    total = rows["total"]
+    n = sum(total.values())
+    total["crag"] = round((total["right"] - total["wrong"]) / n, 2) if n else 0.0
+    return dict(rows)
+
+
 def week_reading(answer: str) -> str | None:
     """What a week answer says, for the INV check: 'week 3', 'break' or None."""
     weeks = extract_weeks(answer)
@@ -218,7 +248,7 @@ def run(cases: list[dict], answer_fn) -> list[dict]:
             passed = score_retrieval(case["gold"]["target"], chunks)
         else:
             passed = score_answer(case["gold"], out["answer"])
-        results.append({**case, "answer": out["answer"], "passed": passed,
+        results.append({**case, "answer": out["answer"], "passed": passed, "calendar": out.get("calendar", []),
                         "reading": week_reading(out["answer"]) if case["family"] == "week" else None,
                         "top_pages": [c.get("doc_id") for c in chunks[:5]]})
     return results
@@ -245,6 +275,7 @@ def summarise(results: list[dict]) -> dict:
         "per_family": {f: _share(v) for f, v in by_family.items()},
         "per_segment": {s: _share(v) for s, v in by_segment.items()},
         "per_family_segment": {c: f"{sum(v)}/{len(v)}" for c, v in by_cell.items()},
+        "right_wrong_abstained": right_wrong_abstained(results),
         "invariance": {
             "pairs": len(pairs),
             # both wordings give the same reading, and it is a reading at all (not two non-answers)
@@ -275,7 +306,8 @@ def main() -> None:
     def pipeline(case: dict) -> dict:
         student = StudentContext(D(case["today"]), case["year"], case["block"])
         out = rag_answer(case["question"], config.TOP_K, student)
-        return {"answer": out["answer"], "chunks": out["chunks"], "student": describe(student)}
+        return {"answer": out["answer"], "chunks": out["chunks"], "student": describe(student),
+                "calendar": out.get("calendar", [])}
 
     RESULTS_DIR.mkdir(exist_ok=True)
     results = run(cases, pipeline)
@@ -286,9 +318,11 @@ def main() -> None:
         "query_rewrite": config.QUERY_REWRITE, "hybrid": config.HYBRID, "rerank_kind": config.RERANK_KIND,
         "rerank_candidates": config.RERANK_CANDIDATES, "collection": config.COLLECTION, "llm_backend": config.LLM_BACKEND, "student_line_as_source": config.STUDENT_LINE_AS_SOURCE, "llm_model": config.LLM_MODEL,
         "scope_mode": config.SCOPE_MODE, "scope_boost_block": config.SCOPE_BOOST_BLOCK, "scope_boost_year": config.SCOPE_BOOST_YEAR,
+        "calendar_facts": config.CALENDAR_FACTS,
     }}
     (RESULTS_DIR / f"{args.name}_behavioral_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
-    print(json.dumps({k: summary[k] for k in ("cases", "passed", "per_family", "per_segment", "invariance")}, indent=2))
+    print(json.dumps({k: summary[k] for k in ("cases", "passed", "per_family", "right_wrong_abstained", "invariance")},
+                     indent=2))
 
 
 if __name__ == "__main__":

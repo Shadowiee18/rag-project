@@ -8,6 +8,7 @@ import time
 from datetime import date
 
 from ragapp import config
+from ragapp.calendar_facts import calendar_facts
 from ragapp.generate import generate
 from ragapp.rerank import rerank
 from ragapp.retrieve import filter_for, retrieve, retrieve_many, scope_boost
@@ -63,8 +64,13 @@ def answer(
         chunks = chunks[:n]
         reranked_at = time.perf_counter()
 
+        facts = []
+        if config.CALENDAR_FACTS and student:
+            with tracer.start_as_current_span("calendar") as span:  # facts from calendar.yaml, not user content
+                facts = calendar_facts(question, student)
+                record(span, output=facts, facts=len(facts))
         with tracer.start_as_current_span("generate") as span:  # its LLM call is a child step (llm.chat)
-            text = generate(question, chunks[:k], describe(student) if student else "")
+            text = generate(question, chunks[:k], describe(student) if student else "", calendar=facts)
             record(span, context_pages=[c["doc_id"] for c in chunks[:k]])
         record(root, output=text, content=True)
         trace_id = format(root.get_span_context().trace_id, "032x") if root.get_span_context().is_valid else None
@@ -74,6 +80,7 @@ def answer(
         "trace_id": trace_id,  # to look the question up in Langfuse, or attach eval grades to it (None: tracing off)
         "search_query": search_query,
         "answer": text,
+        "calendar": facts,  # the calendar facts the model saw (CALENDAR_FACTS=1)
         "chunks": chunks,
         "sources": [
             {"number": n, "doc_id": c["doc_id"], "title": c["title"], "source": c["source"], "score": round(c["score"], 4)}

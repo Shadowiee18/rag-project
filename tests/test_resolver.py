@@ -9,7 +9,8 @@ from datetime import date, timedelta
 
 import pytest
 
-from ragapp.resolver import BlockTarget, DateRange, day_info, load_calendar, resolve_block, resolve_time
+from ragapp.resolver import (BlockTarget, DateRange, day_info, load_calendar, resolve_block, resolve_time,
+                             teaching_weeks, week_number)
 
 D = date.fromisoformat
 TODAY = D("2026-11-26")  # a Thursday in Year 2 Block B week 3
@@ -558,3 +559,41 @@ def test_no_year_in_the_context():
 def test_block_then_week(today, year, block, block_ref, time_ref, expected):
     target = resolve_block(block_ref, D(today), year, block)
     assert resolve_time(time_ref, D(today), target) == expected
+
+
+# ---------------------------------------------------------------- next / last semester, week numbers, teaching weeks
+
+
+@pytest.mark.parametrize(
+    "ref,year,block,expected",
+    [
+        ("next semester", "Year3", "Semester1", BlockTarget("Year3", ("Semester2",), 0)),
+        ("last semester", "Year3", "Semester2", BlockTarget("Year3", ("Semester1",), 0)),
+        ("previous semester", "Year3", "Semester1", BlockTarget("Year2", ("BlockC", "BlockD"), -1)),
+        ("next semester", "Year3", "Semester2", None),                       # nothing after Year 3
+        ("next semester", "Year2", "BlockB", BlockTarget("Year2", ("BlockC", "BlockD"), 0)),
+        ("next semester", "Year2", "BlockA", BlockTarget("Year2", ("BlockC", "BlockD"), 0)),
+        ("next semester", "Year2", "BlockC", BlockTarget("Year3", ("Semester1",), 1)),
+        ("next semester", "Year1", "BlockD", BlockTarget("Year2", ("BlockA", "BlockB"), 1)),
+        ("last semester", "Year2", "BlockC", BlockTarget("Year2", ("BlockA", "BlockB"), 0)),
+        ("last semester", "Year2", "BlockA", BlockTarget("Year1", ("BlockC", "BlockD"), -1)),
+        ("last semester", "Year1", "BlockB", None),                          # nothing before Year 1
+        ("the next semester", "Year3", "Semester1", BlockTarget("Year3", ("Semester2",), 0)),
+    ],
+)
+def test_next_and_last_semester(ref, year, block, expected):
+    assert resolve_block(ref, TODAY, year, block) == expected
+
+
+@pytest.mark.parametrize("ref,number", [("week 3", 3), ("Wk 12", 12), ("w3", 3), ("the week 2", 2),
+                                        ("next week", None), ("week", None), ("3", None)])
+def test_week_number(ref, number):
+    assert week_number(ref) == number
+
+
+def test_teaching_weeks_of_a_target():
+    weeks = teaching_weeks(BlockTarget("Year3", ("Semester2",)), TODAY)
+    assert len(weeks) == 19 and weeks[0].monday == D("2027-02-01") and weeks[-1].monday == D("2027-06-21")
+    assert [w.monday for w in teaching_weeks(Y2B, TODAY)] == [D(m) for m in TEACHING_WEEKS["B"]]
+    assert teaching_weeks(BlockTarget("Year2", ("BlockA",), 1), TODAY) is None  # 2027-28 is not in the file
+    assert teaching_weeks(BlockTarget("Year1", ()), TODAY) is None
