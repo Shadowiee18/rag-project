@@ -23,3 +23,7 @@ HANDOFF.md
 # Downloaded model files (rerankers, BM25), fetched on first use
 models/
 evals/results/*.err
+
+# Self-hosted Langfuse (infra/langfuse/setup.py): Langfuse's own compose file and the generated secrets
+infra/langfuse/docker-compose.yml
+infra/langfuse/app.env

@@ -202,6 +202,22 @@ Settings live in [src/ragapp/config.py](src/ragapp/config.py); the main ones can
 The BUas backend reads `BUAS_LLM_BASE_URL` and `BUAS_LLM_API_KEY` from a git-ignored `.env` file in the project
 folder (the BUas service needs the campus network or VPN). Embeddings and the eval judge stay local either way.
 
+### Tracing (optional): every step of every question in Langfuse
+
+With `TRACING=1` each question becomes one trace: the search queries, the candidate pages and their scores, the
+reranked order, the model and the pages it saw, with the time of each step. The spans are plain OpenTelemetry (OTLP
+over HTTP), so any compatible backend works; the setup below runs a self-hosted [Langfuse](https://langfuse.com) on
+your own PC, because traces contain course page ids.
+
+```
+uv run python infra/langfuse/setup.py      # downloads Langfuse's compose file (pinned), writes random secrets
+cd infra/langfuse && docker compose up -d  # 6 containers, reachable from this PC only; `docker compose stop`
+```
+
+Add the lines of `infra/langfuse/app.env` to `.env`, run a question, and open http://localhost:3000 (the login is
+`LANGFUSE_INIT_USER_EMAIL` / `LANGFUSE_INIT_USER_PASSWORD` in `infra/langfuse/.env`). Questions, queries and answers are
+user content and are only recorded with `TRACE_CONTENT=1`; chunk texts never are.
+
 ## Stack
 
 | Part | Choice |
@@ -211,6 +227,7 @@ folder (the BUas service needs the campus network or VPN). Embeddings and the ev
 | Vector database | Qdrant 1.20 in Docker: dense, sparse (BM25) and multi-vector (ColBERT) collections |
 | Rerankers | fastembed (ONNX Runtime, CPU): `answerai-colbert-small-v1`, `bge-reranker-base` |
 | API | FastAPI |
+| Tracing | OpenTelemetry (OTLP), self-hosted Langfuse |
 | Tooling | uv, pytest, GitHub Actions |
 
 ## Repository layout
@@ -222,7 +239,9 @@ src/ragapp/
 ├── student.py, rewrite.py                # who is asking and when; query expansion
 ├── retrieve.py, rerank.py                # filter, hybrid search, RRF; rerankers
 ├── generate.py, rag.py, api.py           # answer prompt; the whole pipeline; HTTP API
+├── tracing.py                            # one OpenTelemetry span per pipeline step
 └── config.py                             # every switch in one place
+infra/langfuse/                           # self-hosted Langfuse: setup script and our compose override
 evals/                                    # eval runner, re-grader, judge rubric, result summaries
 analysis/corpus_eda.py                    # corpus analysis that the cleaning rules come from
 tests/                                    # unit tests (no LLM, database or course data needed)
