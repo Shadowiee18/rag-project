@@ -218,6 +218,11 @@ Add the lines of `infra/langfuse/app.env` to `.env`, run a question, and open ht
 `LANGFUSE_INIT_USER_EMAIL` / `LANGFUSE_INIT_USER_PASSWORD` in `infra/langfuse/.env`). Questions, queries and answers are
 user content and are only recorded with `TRACE_CONTENT=1`; chunk texts never are.
 
+- Langfuse uses about 3 GB of RAM while running. If it is not running, questions still work: the app prints an
+  export warning and needs a few seconds more to exit (`TRACING=0` turns it off).
+- Keep `infra/langfuse/.env`: its passwords are inside the data volumes. Without it, the only way back is
+  `docker compose down -v`, which deletes the stored traces.
+
 ## Stack
 
 | Part | Choice |
