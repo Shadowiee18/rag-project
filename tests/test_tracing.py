@@ -58,10 +58,10 @@ def all_attribute_text() -> str:
 def test_one_span_per_step_under_one_trace(pipeline):
     pipeline()
     found = spans()
-    assert set(found) == {"answer", "rewrite", "retrieve", "rerank", "generate"}
+    assert set(found) == {"answer", "rewrite", "retrieve", "rerank", "calendar", "generate"}
     root = found["answer"]
     assert root.parent is None
-    for name in ("rewrite", "retrieve", "rerank", "generate"):
+    for name in ("rewrite", "retrieve", "rerank", "calendar", "generate"):
         assert found[name].parent.span_id == root.context.span_id
         assert found[name].context.trace_id == root.context.trace_id
 
@@ -137,7 +137,8 @@ def test_calendar_step_shows_the_facts_given_to_the_model(pipeline, monkeypatch)
     assert found["calendar"].attributes["langfuse.observation.metadata.facts"] == len(facts)
 
 
-def test_no_calendar_step_with_the_switch_off(pipeline):
+def test_no_calendar_step_with_the_switch_off(pipeline, monkeypatch):
+    monkeypatch.setattr(config, "CALENDAR_FACTS", False)
     result = pipeline()
     assert "calendar" not in spans() and result["calendar"] == []
 

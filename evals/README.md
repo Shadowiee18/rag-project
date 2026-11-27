@@ -641,7 +641,7 @@ also mixed ones ("what is due in week 3?"), and no router that has to decide wha
    correct and no more wrong answers than the baseline. A tie passes.
 Before and after are run on the same day, same code, switch off then on.
 
-### Result: not adopted by the rule (the student dev set lost one correct answer); `CALENDAR_FACTS` stays off
+### Result: not adopted by the rule (the student dev set lost one correct answer); switched on by decision
 
 Same code, same day, switch off then on (`cal_off` / `cal_on`, `dev_cal_off_*` / `dev_cal_on_*`); answering model
 `qwen3.8-27b`. The "off" suite run reproduced the earlier baseline exactly (68 / 5 / 44).
@@ -681,3 +681,8 @@ Same code, same day, switch off then on (`cal_off` / `cal_on`, `dev_cal_off_*` /
 - What would be measurable next, as its own experiment with a rule set beforehand: facts only when the question has
   a time or block reference or today is not a teaching day (s27 would then get none), or repeated runs to measure the
   dev set's run-to-run noise.
+
+**Decision (the student, after seeing the result): `CALENDAR_FACTS` is on by default**, knowing it failed the rule
+set beforehand. The trade accepted: every calendar question in the suite and the sanity set right (117/117 and 13/13,
+was 68 and 1), against one student dev answer worse (s27, which has no calendar reference) and two fewer faithful
+student answers, possibly run-to-run noise. `CALENDAR_FACTS=0` is the setting before.
