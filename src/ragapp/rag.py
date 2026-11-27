@@ -11,9 +11,10 @@ from ragapp import config
 from ragapp.generate import generate
 from ragapp.profile import student_context
 from ragapp.rerank import rerank
-from ragapp.retrieve import retrieve, retrieve_many
+from ragapp.retrieve import filter_for, retrieve, retrieve_many, scope_boost
 from ragapp.rewrite import rewrite_query, search_queries, week_queries
 from ragapp.student import StudentContext, describe
+from ragapp.tracing import pages, record, setup as setup_tracing, tracer
 
 
 def answer(
@@ -24,25 +25,54 @@ def answer(
     n = max(k, retrieve_k or 0)
     pool = max(n, config.RERANK_CANDIDATES) if config.RERANK_MODEL else n  # reranking needs candidates to sort
     user_year, user_block, today = (student.year, student.block, student.today) if student else (None, None, None)
-    if config.QUERY_REWRITE in ("2", "3"):
-        queries = search_queries(question, student) if config.QUERY_REWRITE == "2" else week_queries(question, student)
+    with tracer.start_as_current_span("answer") as root:
+        root.set_attribute("langfuse.trace.name", "answer")
+        for key, value in (("year", user_year), ("block", user_block), ("today", today and str(today))):
+            if value:
+                root.set_attribute(f"langfuse.trace.metadata.{key}", value)
+        record(root, input=question, content=True)
+
+        with tracer.start_as_current_span("rewrite") as span:
+            if config.QUERY_REWRITE in ("2", "3"):
+                queries = search_queries(question, student) if config.QUERY_REWRITE == "2" else week_queries(question, student)
+            else:
+                queries = [question]
+                if config.QUERY_REWRITE == "1":
+                    queries = [rewrite_query(question, describe(student, with_plan=False) if student else "")]
+            record(span, output=queries, content=True, mode=config.QUERY_REWRITE, queries=len(queries))
         rewritten_at = time.perf_counter()
-        chunks = retrieve_many(queries, pool, question, user_year, user_block, today)
-    else:
-        queries = [question]
-        if config.QUERY_REWRITE == "1":
-            queries = [rewrite_query(question, describe(student, with_plan=False) if student else "")]
-        rewritten_at = time.perf_counter()
-        chunks = retrieve(queries[0], pool, user_year=user_year, user_block=user_block, today=today)
-    search_query = " || ".join(queries)
-    retrieved_at = time.perf_counter()
-    if config.RERANK_MODEL:
-        chunks = rerank(question, chunks)[:n]  # the original question: what the student actually asked
-    reranked_at = time.perf_counter()
-    text = generate(question, chunks[:k], describe(student) if student else "")
+
+        year, blocks = filter_for(question, user_year, user_block, today)
+        with tracer.start_as_current_span("retrieve") as span:
+            if config.QUERY_REWRITE in ("2", "3"):
+                chunks = retrieve_many(queries, pool, question, user_year, user_block, today)
+            else:
+                chunks = retrieve(queries[0], pool, user_year=user_year, user_block=user_block, today=today)
+            record(span, "retriever", output=pages(chunks), candidates=len(chunks), hybrid=config.HYBRID,
+                   scope=" ".join([year or "", *(blocks or [])]).strip() or "all", scope_mode=config.SCOPE_MODE)
+        search_query = " || ".join(queries)
+        retrieved_at = time.perf_counter()
+
+        if config.RERANK_MODEL:
+            with tracer.start_as_current_span("rerank") as span:
+                chunks = rerank(question, chunks)  # the original question: what the student actually asked
+                record(span, "retriever", output=pages(chunks), reranker=config.RERANK_KIND)
+        if config.SCOPE_MODE == "boost":  # after reranking: the bonus works on the final relevance scores
+            with tracer.start_as_current_span("scope_boost") as span:
+                chunks = scope_boost(chunks, year, blocks, config.SCOPE_BOOST_BLOCK, config.SCOPE_BOOST_YEAR)
+                record(span, output=pages(chunks), w_block=config.SCOPE_BOOST_BLOCK, w_year=config.SCOPE_BOOST_YEAR)
+        chunks = chunks[:n]
+        reranked_at = time.perf_counter()
+
+        with tracer.start_as_current_span("generate") as span:  # its LLM call is a child step (llm.chat)
+            text = generate(question, chunks[:k], describe(student) if student else "")
+            record(span, context_pages=[c["doc_id"] for c in chunks[:k]])
+        record(root, output=text, content=True)
+        trace_id = format(root.get_span_context().trace_id, "032x") if root.get_span_context().is_valid else None
     finished = time.perf_counter()
     return {
         "question": question,
+        "trace_id": trace_id,  # to look the question up in Langfuse, or attach eval grades to it (None: tracing off)
         "search_query": search_query,
         "answer": text,
         "chunks": chunks,
@@ -66,6 +96,7 @@ def main() -> None:
     parser.add_argument("--block", default="", help="e.g. BlockB; default: the block the calendar puts today in")
     parser.add_argument("--today", default="", help="YYYY-MM-DD, default: today")
     args = parser.parse_args()
+    setup_tracing()
 
     student = None
     if args.year or args.today:

@@ -1,0 +1,51 @@
+{
+  "filter": {
+    "page": {
+      "n": 26,
+      "hit@1": 18,
+      "hit@5": 25
+    },
+    "student": {
+      "n": 13,
+      "hit@1": 6,
+      "hit@5": 9
+    },
+    "dir": {
+      "n": 18,
+      "hit@1": 3,
+      "hit@5": 4
+    },
+    "counter": {
+      "n": 21,
+      "hit@1": 17,
+      "hit@5": 20
+    }
+  },
+  "boost": {
+    "w_block": 0.0,
+    "w_year": 0.0,
+    "scores": {
+      "page": {
+        "n": 26,
+        "hit@1": 18,
+        "hit@5": 25
+      },
+      "student": {
+        "n": 13,
+        "hit@1": 9,
+        "hit@5": 12
+      },
+      "dir": {
+        "n": 18,
+        "hit@1": 10,
+        "hit@5": 18
+      },
+      "counter": {
+        "n": 21,
+        "hit@1": 16,
+        "hit@5": 19
+      }
+    }
+  },
+  "passes": false
+}

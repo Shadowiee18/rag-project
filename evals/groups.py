@@ -51,7 +51,8 @@ def numbers(rows: list[dict]) -> dict:
         with_evidence = [r for r in answerable if "evidence_found@5" in r]
         if with_evidence:
             out["all_evidence@5"] = share([r["evidence_found@5"] == 1 for r in with_evidence])
-        out["correct"] = share([r["judge"] == "CORRECT" for r in answerable])
+        if all("judge" in r for r in answerable):  # local grades; Claude grades are added later by score.py
+            out["correct"] = share([r["judge"] == "CORRECT" for r in answerable])
     if unanswerable:
         out["refused"] = share([r["refused"] for r in unanswerable])
     return out

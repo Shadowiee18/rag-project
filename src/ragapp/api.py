@@ -21,8 +21,10 @@ from ragapp import config
 from ragapp.profile import academic_year, status, student_context
 from ragapp.profile_store import ProfileStore
 from ragapp.rag import answer
+from ragapp.tracing import setup as setup_tracing
 
 app = FastAPI(title="ADS & AI study assistant")
+setup_tracing()  # TRACING=1: every /ask becomes a trace (see tracing.py)
 
 COOKIE = "ragapp_user"
 USER_ID = re.compile(r"[A-Za-z0-9_-]{22}")  # what secrets.token_urlsafe(16) makes: 128 random bits

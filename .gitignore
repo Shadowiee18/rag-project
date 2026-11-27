@@ -24,5 +24,9 @@ HANDOFF.md
 models/
 evals/results/*.err
 
+# Self-hosted Langfuse (infra/langfuse/setup.py): Langfuse's own compose file and the generated secrets
+infra/langfuse/docker-compose.yml
+infra/langfuse/app.env
+
 # User data: saved student profiles (SQLite database + its WAL files)
 data/profiles.sqlite3*

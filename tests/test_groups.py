@@ -57,3 +57,9 @@ def test_coverage_shows_empty_cells_for_every_type_and_site_segment():
     assert table["deadline"]["Year2 BlockB"] == {"dev": 1, "test": 0}
     assert table["people"]["Year2 BlockA"] == {"dev": 0, "test": 0}  # a type and a block nobody asked about
     assert list(table["rules"])[:4] == ["Year2 BlockA", "Year2 BlockB", "Year3", "shared"]  # site order, then the rest
+
+
+def test_group_numbers_without_local_grades_leave_correct_out():
+    rows = [{"source_ids": ["p"], "hit_rank": 1, "refused": False}]
+    assert "correct" not in groups.numbers(rows)
+    assert groups.numbers([{**rows[0], "judge": "CORRECT"}])["correct"] == 1.0

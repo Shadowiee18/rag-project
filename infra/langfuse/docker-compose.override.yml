@@ -1,0 +1,26 @@
+# Our changes on top of Langfuse's own docker-compose.yml (downloaded by setup.py, not in git).
+# Docker Compose merges this file automatically when run in this folder.
+name: ragapp-langfuse  # fixed project name: the data volumes keep their names wherever this folder is
+
+services:
+  # Reachable from this PC only (Langfuse publishes the web UI and MinIO on all network interfaces).
+  langfuse-web:
+    restart: "no"  # runs only when started, not every time Docker starts
+    ports: !override
+      - 127.0.0.1:3000:3000
+  minio:
+    restart: "no"
+    ports: !override
+      - 127.0.0.1:9090:9000
+      - 127.0.0.1:9091:9001
+  langfuse-worker:
+    restart: "no"
+  clickhouse:
+    restart: "no"
+  redis:
+    restart: "no"
+  postgres:
+    restart: "no"
+  # Langfuse's LLM gateway (beta) is not used: it only starts with `--profile ai-gateway`.
+  langfuse-ai-gateway:
+    profiles: ["ai-gateway"]

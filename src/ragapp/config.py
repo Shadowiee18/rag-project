@@ -26,12 +26,19 @@ EMBED_MODEL = "qwen3-embedding:0.6b"
 
 # The answering LLM (answers and query rewriting): "ollama" = local GPU, "buas" = the BUas LLM server
 # (an OpenAI-compatible API hosted for BUas students; needs BUAS_LLM_BASE_URL and BUAS_LLM_API_KEY in .env).
-LLM_BACKEND = os.getenv("LLM_BACKEND", "ollama")
+LLM_BACKEND = os.getenv("LLM_BACKEND", "buas")  # buas since Phase 3: as correct, far fewer made-up claims (README)
 LLM_MODEL = os.getenv("LLM_MODEL", "qwen3:8b" if LLM_BACKEND == "ollama" else "qwen3.8-27b")
 BUAS_LLM_BASE_URL = os.getenv("BUAS_LLM_BASE_URL", "")
 BUAS_LLM_API_KEY = os.getenv("BUAS_LLM_API_KEY", "")
+# 1: the answer prompt treats the calendar-based Student line as a source (see generate.py). Off until measured.
+STUDENT_LINE_AS_SOURCE = os.getenv("STUDENT_LINE_AS_SOURCE", "0") == "1"
 # The eval's local judge stays the same model whatever answers, so correctness numbers stay comparable.
 JUDGE_MODEL = "qwen3:8b"
+
+# Tracing (see tracing.py): every step of every question as an OpenTelemetry span, e.g. into a local Langfuse.
+TRACING = os.getenv("TRACING", "0") == "1"
+# Record questions, queries and answers in the spans (user content; off by default, as in OpenTelemetry's GenAI rules).
+TRACE_CONTENT = os.getenv("TRACE_CONTENT", "0") == "1"
 
 # Qdrant (started with `docker compose up -d`)
 QDRANT_URL = "http://localhost:6333"
@@ -66,6 +73,14 @@ BM25_MODEL = "Qdrant/bm25"  # 0.01 GB: tokenizer, English stemmer and stopwords;
 # plus pages that belong to no year (all the shared Study Content).
 # On by default since experiment 2 (see README results).
 FILTER_BY_QUESTION_YEAR = os.getenv("FILTER_BY_QUESTION_YEAR", "1") == "1"
+# How the question's scope (the asker's year/block, or the block the question names or "next block" points to;
+# see retrieve.filter_for) is used, for every question alike:
+#   "filter" search only the scope + shared pages (since experiment 2)
+#   "boost"  that search AND one over the scope's own pages only, merge, rerank, then add a bonus to pages in the
+#            scope (scores scaled 0-1 per question first). Shared pages get no bonus and no penalty.
+SCOPE_MODE = os.getenv("SCOPE_MODE", "filter")
+SCOPE_BOOST_BLOCK = float(os.getenv("SCOPE_BOOST_BLOCK", "0.2"))  # page in the scope's year and block
+SCOPE_BOOST_YEAR = float(os.getenv("SCOPE_BOOST_YEAR", "0.0"))    # page in the scope's year
 
 # Rewrite the question before searching (see rewrite.py):
 #   "0" off | "1" v1, LLM writes one query (rejected by the eval) | "2" v2, LLM expansion + student week, multi-query + RRF
