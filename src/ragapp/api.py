@@ -10,8 +10,10 @@ from fastapi import FastAPI, Query
 
 from ragapp.rag import answer
 from ragapp.student import StudentContext
+from ragapp.tracing import setup as setup_tracing
 
 app = FastAPI(title="ADS & AI study assistant")
+setup_tracing()  # TRACING=1: every /ask becomes a trace (see tracing.py)
 
 
 @app.get("/health")
