@@ -620,3 +620,23 @@ ties -> smaller weights; then one check on the held-out test split with those we
 - **What would separate the two cases is the question's intent, not its scope**: whether it asks about the block
   itself or only mentions it. That points to a learned signal (a reranker fine-tuned on our own question -> page pairs,
   or a question-type field in one query plan), measured on these same counter-examples, rather than another rule.
+
+## Phase 3 step 6: calendar questions answered from the calendar (`CALENDAR_FACTS=1`)
+
+Calendar questions failed because the facts were in `calendar.yaml` but only today's week reached the model (the
+Student line). Code now finds the time and block words in the question with the resolver (week N, next / last week,
+a date, tomorrow, a weekday, next / last block or semester, a named block) and adds the matching calendar facts to the
+prompt as a "Calendar" section: today's week or break, that week's dates, whether a day is a break or a closed day,
+a block's start, end, breaks and closed days. The model still writes the answer; the prompt counts the Calendar lines
+as a source (no citation needed). Chosen with the student over answering in code: one mechanism for every question,
+also mixed ones ("what is due in week 3?"), and no router that has to decide what counts as "only a calendar question".
+
+**Adoption rule, fixed before the first run** (agreed with the student, not changed after):
+1. Behavioural suite, `qwen3.8-27b`: total wrong answers no more than before (5), no family gets more wrong answers or
+   fewer right ones, and the CRAG score goes up. Right / wrong / abstained as in the table above: a case that fails
+   is "wrong" when the answer names a week (week family) or a date (date families), else "abstained"
+   (`behavioral.py` `outcome`; it reproduces every earlier row exactly).
+2. Development split, page and student sets (`--user-year simulated`): right page first and in the top 5 not lower,
+   and Claude's blind grading (rubric v1.2, the Calendar lines count as context like the Student line) gives no fewer
+   correct and no more wrong answers than the baseline. A tie passes.
+Before and after are run on the same day, same code, switch off then on.
