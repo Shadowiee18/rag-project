@@ -4,8 +4,9 @@ A question-answering system over a university programme's course site: 506 login
 study years. A student asks "is using an LLM allowed for the assignment?" or "what is due this week?" and gets a
 short answer with numbered citations to the course pages, or "I don't know" when the pages don't say.
 
-Everything runs on one desktop PC (8 GB GPU): the LLM, the embeddings, the vector database and the rerankers.
-No question or course page leaves the machine.
+Search runs on one desktop PC (8 GB GPU): the embeddings, the vector database and the rerankers. By default the
+answer is written by a 27B model on the university's own LLM service, which receives the question and the retrieved
+page excerpts. With `LLM_BACKEND=ollama` a local 8B model answers instead, and nothing leaves the machine.
 
 The project is built evaluation-first: every retrieval change was measured on a fixed question set before it was
 kept, and several ideas were dropped because the numbers said so. The full record is in
