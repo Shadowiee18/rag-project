@@ -22,17 +22,17 @@ def answer(
     started = time.perf_counter()
     n = max(k, retrieve_k or 0)
     pool = max(n, config.RERANK_CANDIDATES) if config.RERANK_MODEL else n  # reranking needs candidates to sort
-    user_year, user_block = (student.year, student.block) if student else (None, None)
+    user_year, user_block, today = (student.year, student.block, student.today) if student else (None, None, None)
     if config.QUERY_REWRITE in ("2", "3"):
         queries = search_queries(question, student) if config.QUERY_REWRITE == "2" else week_queries(question, student)
         rewritten_at = time.perf_counter()
-        chunks = retrieve_many(queries, pool, question, user_year, user_block)
+        chunks = retrieve_many(queries, pool, question, user_year, user_block, today)
     else:
         queries = [question]
         if config.QUERY_REWRITE == "1":
             queries = [rewrite_query(question, describe(student, with_plan=False) if student else "")]
         rewritten_at = time.perf_counter()
-        chunks = retrieve(queries[0], pool, user_year=user_year, user_block=user_block)
+        chunks = retrieve(queries[0], pool, user_year=user_year, user_block=user_block, today=today)
     search_query = " || ".join(queries)
     retrieved_at = time.perf_counter()
     if config.RERANK_MODEL:

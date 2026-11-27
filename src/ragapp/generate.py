@@ -1,8 +1,6 @@
 """Query time, step 2: give the retrieved chunks to the LLM and get a cited answer."""
 
-import ollama
-
-from ragapp import config
+from ragapp import llm
 
 SYSTEM_PROMPT = """You answer questions from students of the Applied Data Science & AI programme \
 at Breda University of Applied Sciences.
@@ -29,13 +27,7 @@ def build_prompt(question: str, chunks: list[dict], student: str = "") -> str:
 
 
 def generate(question: str, chunks: list[dict], student: str = "") -> str:
-    response = ollama.chat(
-        model=config.LLM_MODEL,
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": build_prompt(question, chunks, student)},
-        ],
-        think=False,  # qwen3 can "think" first; off = faster answers
-        options={"temperature": 0, "num_ctx": 8192},
-    )
-    return response.message.content.strip()
+    return llm.chat([
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": build_prompt(question, chunks, student)},
+    ])

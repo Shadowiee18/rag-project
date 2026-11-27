@@ -1,7 +1,8 @@
 """Eval results per group of questions, so an average can't hide where the system fails.
 
 Two labels per question:
-- question_type (hand-labelled in the question files, from the question text only):
+- question_type (in the question files; labelled by an LLM from the question text only, not reviewed by a person;
+  step 9's router labels them independently, and disagreements are what gets reviewed):
     schedule | deadline | overview | rules | howto | concept | people | out_of_scope
   A question asking two things gets the riskier label: deadline > rules > the rest.
 - segment (computed here): where the answer lives, from its source pages' year/block metadata.

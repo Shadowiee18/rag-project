@@ -77,7 +77,7 @@ def first_hit_rank(retrieved_doc_ids: list[str], source_ids: list[str]) -> int |
 
 def judge(question: str, expected: str, answer: str) -> str:
     response = ollama.chat(
-        model=config.LLM_MODEL,
+        model=config.JUDGE_MODEL,  # always the local judge, whichever LLM answered
         messages=[{"role": "user", "content": JUDGE_PROMPT.format(question=question, expected=expected, answer=answer)}],
         think=False,
         # Same num_ctx as generate.py: a different value makes Ollama reload the model on every call.
@@ -212,7 +212,8 @@ def summarise(results: list[dict], user_year_mode: str) -> dict:
             "total_max": round(max(total_times), 2),
         },
         "config": {
-            "embed_model": config.EMBED_MODEL, "llm_model": config.LLM_MODEL,
+            "embed_model": config.EMBED_MODEL, "llm_backend": config.LLM_BACKEND, "llm_model": config.LLM_MODEL,
+            "judge_model": config.JUDGE_MODEL,
             "chunk_size": config.CHUNK_SIZE, "chunk_overlap": config.CHUNK_OVERLAP, "top_k": config.TOP_K,
             "chunk_headers": config.CHUNK_HEADERS, "filter_by_question_year": config.FILTER_BY_QUESTION_YEAR,
             "query_rewrite": config.QUERY_REWRITE, "user_year": user_year_mode,

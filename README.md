@@ -104,22 +104,29 @@ the reranker's gain at almost no cost.
   graded the same answers blind with a written rubric: 76% the same label (Cohen's kappa 0.57). Correctness numbers
   are treated as rough; retrieval numbers are exact.
 - **Results per group**: every question is labelled with a question type (schedule, deadline, overview, rules, how-to,
-  concept, people, out of scope) and a segment (the year/block its answer lives in, computed from the source pages), and
+  concept, people, out of scope; labelled by an LLM, not reviewed by a person) and a segment (the year/block its answer lives in, computed from the source pages), and
   development runs report each group separately. An average over everything hides where the system fails.
 - **Noise floor**: one question is 3.6 points (page) or 6.7 points (student) on the development split. A difference is
   called real only when it spans several questions.
 - **The eval was reviewed too**: a review found three bugs in the eval code (judge label parsing, partial refusals,
   and the app and eval merging result lists of different depth). Each got a failing test, a fix, and all 52 saved
   runs were re-graded from their saved answers.
-- **CI**: 72 unit tests on every pull request. They need no LLM, database or course data: the models are faked.
+- **Behavioural suite** (`evals/behavioral.py`): 135 template questions asked as a student of every year and block, on
+  week 1, week 3, the last week and every break ("which week are we in?", "dates of week N", "when does the next block
+  start?", "what do we have next block?", and two wordings of the same question). Gold answers come from the official
+  calendar, scoring is exact match in code: no judge, no hand labels.
+- **CI**: 531 unit tests on every pull request. They need no LLM, database or course data: the models are faked.
 
 ## Known limitations
 
 - **Date questions** ("do I have lectures tomorrow?", "when is the next lecture?") fail. The right schedule chunk is
   hard to retrieve, and an 8B model compares dates unreliably. Next step: a calendar route that reads the dated
   entries in code and lets the LLM only phrase the answer.
-- **The week lookup** reads one page format; it currently works for 1 of 10 blocks. Generalising it is part of the
-  next phase.
+- **Weeks, breaks and other blocks** (behavioural suite, after Phase 3 step 4): the current week is right on every
+  teaching day of every block (60/60, was 13/60), but in a holiday the model often still names a week (12/30 right),
+  it computes other weeks' dates itself and gets them wrong (6/20), and a "next / last block" question finds that
+  block's page first in only 2 of 18 cases: shared pages outrank it. Next steps: the calendar route answers these in
+  code, and block questions search the resolved block's own pages.
 - **Small and lopsided evaluation sets** (28 and 15 answerable questions on development): differences of one or two
   questions are noise, and the questions cover mostly Year 2 Block B and the shared pages. 8 of the 14 parts of the site
   (blocks, semesters, year pages and shared pages) have no development question, and none asks for a person or contact.
