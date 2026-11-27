@@ -18,6 +18,7 @@ uv run python evals/groups.py --run my_run # a saved dev run's numbers per quest
 | `rejudge.py` | re-grades saved runs under the current judge rules |
 | `groups.py` | coverage (questions per question type x segment) and a saved dev run's numbers per group |
 | `score.py` | judge agreement (Cohen's kappa) and chunk-level evidence from saved runs |
+| `scope_eval.py` | retrieval only: saves reranked candidates once, then tunes the scope bonus offline; counter-examples |
 | `judge_rubric.md` | rubric for the strong judge (correctness, faithfulness, citations) |
 | `golden_set.example.jsonl` | the question-file format |
 | `results/*_summary.json` | the numbers of every run (committed); per-question files stay local (course material) |
@@ -468,3 +469,153 @@ What the failures say (read on the answers, all segments):
   "what do we have next block?" those rank first. The fix is general, not per question: an overview question about a
   resolved block should search that block's own pages (and its year/block words), not the shared ones.
 
+## Phase 3: a larger answering model (BUas LLM service) on the behavioural suite
+
+BUas offers students an LLM service with an OpenAI-compatible API (on its own servers). `LLM_BACKEND=buas` sends the
+answer and query-rewrite calls there; embeddings, reranking and the search index stay local. Same suite, same day,
+step 4 code; the only change is the answering model: local `qwen3:8b` (4-bit) against `qwen3.8-27b` on the service
+(the only chat model the account offered that day).
+
+Scored as before (exact match) and, because a wrong date costs a student more than "I don't know", also split into
+right / wrong / abstained for the 117 cases with an answer to read (the CRAG score: +1 right, -1 wrong, 0 abstained):
+
+| | Exact match (135) | Right | Wrong | Abstained | CRAG score |
+|---|---|---|---|---|---|
+| before step 4, `qwen3:8b` | 14 (10%) | 14 | 83 | 20 | -0.59 |
+| step 4, `qwen3:8b` | 81 (60%) | 79 | 28 | 10 | +0.44 |
+| step 4, `qwen3.8-27b` | 71 (53%) | 68 | **5** | 44 | **+0.54** |
+
+| Family (right / wrong / abstained) | `qwen3:8b` | `qwen3.8-27b` |
+|---|---|---|
+| Which week, teaching days (60) | 60 / 0 / 0 | 60 / 0 / 0 |
+| Which week, breaks (30) | 12 / 17 / 1 | 7 / 5 / 18 |
+| Dates of week N (20) | 6 / 6 / 8 | 1 / 0 / 19 |
+| Next block starts (7) | 1 / 5 / 1 | 0 / 0 / 7 |
+| DIR next + last block, top result (18) | 2 | 3 |
+
+- **The larger model is more honest, not more knowing.** It invents almost no week numbers or dates (5 wrong against
+  28), but the facts it would need are still not in its prompt, so it abstains instead. On the questions where the
+  answer IS in the prompt (the current week), both are perfect.
+- **It ignores the holiday line.** The student line says "This week is the Christmas holiday", yet the 27B model
+  answers "the context does not contain a calendar". The system prompt tells the model to use ONLY the numbered
+  passages, and the larger model follows that rule more strictly; the student line is not a numbered passage. A
+  general prompt fix (the student line counts as a source) is its own experiment, measured on both models.
+- **Search changed too**: query rewriting also uses the answering LLM, so only 15 of 135 cases retrieved the same top 5
+  pages. "Next / last block" is still a search problem (2 → 3 of 18), not a model problem.
+- Model choice: not changed yet. The 27B model is the safer one (fewest wrong answers); the 8B scores higher on exact
+  match because it guesses, and sometimes guesses right.
+
+### Prompt fix tried: the Student line as a source (`STUDENT_LINE_AS_SOURCE=1`) - not adopted
+
+The system prompt now optionally says the calendar-based Student line is a source too, including "this week is a
+holiday or study week" (no citation needed). Measured on the 27B model (same suite):
+
+| `qwen3.8-27b` (117 cases with an answer to read) | Right | Wrong | Abstained | CRAG score |
+|---|---|---|---|---|
+| prompt as before | 68 | **5** | 44 | **+0.54** |
+| Student line as a source | 72 | 13 | 32 | +0.50 |
+| breaks only (30): before → with the fix | 7 → 11 | 5 → 10 | 18 → 9 | |
+
+- The model became willing to answer in holidays, not accurate: of 12 abstentions it gave up, about 4 became right and
+  8 became wrong (e.g. "week 8" in the study week). Wrong answers are what this project minimises, so the switch stays
+  off. A prompt cannot make a model reliably follow a negative fact ("no teaching this week"); the calendar route
+  (step 6) answers "which week / is it a holiday" in code instead.
+- Model decision, by a rule set before the run (the 27B must beat the local 8B on the CRAG score and give no more wrong
+  answers): the 27B model wins with the prompt as before (+0.54 vs +0.44, 5 vs 28 wrong). The same test on the local 8B
+  was skipped. Before it becomes the default, it still has to pass the normal dev eval, graded by Claude.
+
+## Phase 3: the answering model on the development split, graded blind by Claude
+
+The 27B model passed the behavioural suite (above); this checks that it is not worse on everything else (rules,
+how-tos, course content). Development split, default retrieval, answers from local `qwen3:8b` (the step 4 run) and
+from `qwen3.8-27b` on the BUas service. All 102 answers were mixed, given random ids and graded blind by Claude
+subagents with rubric v1.2 (8 batches, each grader saw only its own batch); then mapped back.
+
+| Development split | Page (32) 8B → 27B | Student (19) 8B → 27B | Both (51): 27B better / worse, McNemar |
+|---|---|---|---|
+| Correct | 25 → 27 | 6 → 6 | 3 / 1, p = 0.63 |
+| Not wrong (correct or partial) | 31 → 31 | 11 → 13 | 3 / 1, p = 0.63 |
+| **Faithful** (every claim in the chunks or Student line) | 27 → **32** | 10 → **16** | **12 / 1, p = 0.003** |
+| Citations ok (answered questions) | 83% → 100% | 44% → 85% | |
+| Unanswerable correctly refused | 3/4 → 4/4 | 2/2 → 2/2 | |
+| Right page ranked first / in top 5 | same | 41% → 35% / 59% → 65% | query rewriting uses the LLM too |
+| Median time per answer | 4.2 → 4.6 s | 4.5 → 5.0 s | |
+
+- **Decision: the BUas `qwen3.8-27b` is the default** (`LLM_BACKEND=buas`). It is as often correct, and its answers are
+  far more often fully supported by their sources: the only difference here with p < 0.05. In the behavioural suite
+  it gave 5 wrong dates/weeks against 28. Cost: about 0.4 s more per answer, and it needs the BUas service (campus or
+  VPN); `LLM_BACKEND=ollama` keeps the fully local setup.
+- **The old local judge is confirmed unreliable**: on the 8B answers it agreed with Claude on 68% (page, kappa 0.33)
+  and 59% (student, kappa 0.41) of labels. From Phase 3 on, Claude grades (`run_eval.py --judge claude`, default).
+- Student-style answers are still mostly not correct (6 of 19 for both models): those are retrieval and schedule
+  problems (the calendar route, step 6), not model problems.
+
+## Phase 3: questions about another block ("next block", "Year 1 Block C") - nothing adopted yet
+
+The resolver turns "what do we have next block?" into the right block, but the search filter keeps the shared pages
+(no year/block) next to it, and for a vague question those rank first: in the behavioural suite the top result was a
+page of the target block for 3 of 18 next/last block cases (`buas_qwen38_27b`). Three fixes were measured; none is the
+default. `SCOPE_MODE=filter` (today's search) stays.
+
+### 1. Block-only search (a hard filter for block questions) - reverted
+
+Questions that name a block or say next / last block searched only that block's own pages, and the block's name was
+added to the queries (`block_only` runs, same day as the baselines):
+
+| | Before | Block-only |
+|---|---|---|
+| Suite: next / last block, top result from the block (18) | 3 | 18 |
+| Suite: all other families (117) | 68 | 68 |
+| Dev page (32): hit@1 / hit@5 / all evidence @5 | 86% / 100% / 71% | identical |
+| Dev student (19): hit@1 / hit@5 / all evidence @5 | 35% / 65% / 24% | identical |
+
+- **18 / 18 is true by construction**: the test checks that the top page is from the target block, and the rule let
+  no other page in. The dev set could not show the cost either: its 4 questions that name a block all have the answer
+  on the block's own page.
+- **The cost, measured below with counter-examples**: a bonus strong enough to act like this filter leaves 0 of 24
+  shared-page answers in the top 5. And it was one more rule for one kind of question.
+
+### 2. One mechanism for every question: the scope as a bonus, tuned offline
+
+The scope is what the filter already resolves (the asker's year/block, a block the question names, "next block").
+`SCOPE_MODE=boost` adds a search over the scope's own pages, merges, reranks, scales the scores 0-1 per question and adds
+`SCOPE_BOOST_BLOCK` / `SCOPE_BOOST_YEAR` to pages in the scope; shared pages get no bonus and no penalty.
+`scope_eval.py` saves each case's reranked candidates once (both modes), then scores every weight pair in seconds.
+
+Case sets: dev page questions **without** an asker context (the simulated year is the answer page's year, so a year
+bonus would win by construction), dev student questions with their context, the suite's 18 next / last block cases,
+and **counter-examples**: every dev question answered by a shared page, asked with a block in front
+("Year 1 Block C: <question>", rotating over the 10 segments). Rule, fixed before the first run: among weights whose
+hit@5 on page, student and counter-examples is at least today's, the most hits (hit@1 + hit@5 over all four sets);
+ties -> smaller weights; then one check on the held-out test split with those weights.
+
+| Dev (hit@1 / hit@5) | Page (28) | Student (17) | Next/last block (18) | Counter-examples (24) |
+|---|---|---|---|---|
+| Today (`filter`) | 24 / 28 | 6 / 11 | 3 / 4 | 19 / 22 |
+| a) everything + scope's pages, best total (0.2 / 0.2) | 24 / 28 | 15 / 16 | 17 / 18 | 11 / **16** |
+| a) block bonus >= 1 (acts like the block-only filter) | 24 / 28 | 17 / 17 | 18 / 18 | **0 / 0** |
+| b) today's search + scope's pages, no bonus (rule's choice) | 24 / 28 | 7 / **14** | 10 / **18** | 17 / 22 |
+| b) block bonus 0.3, year 0.05 (most hits, fails the rule) | 24 / 28 | 16 / 16 | 17 / 18 | 12 / 19 |
+
+- **a) searching everything** (no year filter) failed the rule at every weight: other years' pages crowd in (a Year 2
+  student got Year 3 pages on top), and every weight that lifts next / last block questions buries shared-page answers.
+- **b) keeping today's filtered search and adding one over the scope's own pages**: the rule chose **no bonus**. The
+  gain comes from the extra search alone (the block's pages become candidates); any bonus above 0.05 trades
+  shared-page answers for block questions, in about equal numbers. A single scope weight cannot tell "a question about
+  Block C" from "a question that mentions Block C but is answered by a general page".
+
+**Held-out test split**, b) with no bonus, scored once (totals only):
+
+| Test (hit@1 / hit@5) | Page (26) | Student (13) | Next/last block* (18) | Counter-examples (21) |
+|---|---|---|---|---|
+| Today (`filter`) | 18 / 25 | 6 / 9 | 3 / 4 | 17 / **20** |
+| b) today's search + scope's pages | 18 / 25 | 9 / 12 | 10 / 18 | 16 / **19** |
+
+\*The same template cases as on dev, so not held out.
+
+- **Not adopted, by the rule**: one shared-page answer left the top 5 on the test split. The student gain (9 -> 12 of 13
+  in the top 5) repeats on test, so the extra search is promising, but the rule was set before the run and is not
+  changed after seeing the result.
+- **What would separate the two cases is the question's intent, not its scope**: whether it asks about the block
+  itself or only mentions it. That points to a learned signal (a reranker fine-tuned on our own question -> page pairs,
+  or a question-type field in one query plan), measured on these same counter-examples, rather than another rule.

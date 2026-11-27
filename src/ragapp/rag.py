@@ -10,7 +10,7 @@ from datetime import date
 from ragapp import config
 from ragapp.generate import generate
 from ragapp.rerank import rerank
-from ragapp.retrieve import retrieve, retrieve_many
+from ragapp.retrieve import filter_for, retrieve, retrieve_many, scope_boost
 from ragapp.rewrite import rewrite_query, search_queries, week_queries
 from ragapp.student import StudentContext, describe
 
@@ -36,7 +36,11 @@ def answer(
     search_query = " || ".join(queries)
     retrieved_at = time.perf_counter()
     if config.RERANK_MODEL:
-        chunks = rerank(question, chunks)[:n]  # the original question: what the student actually asked
+        chunks = rerank(question, chunks)  # the original question: what the student actually asked
+    if config.SCOPE_MODE == "boost":  # after reranking: the bonus works on the final relevance scores
+        year, blocks = filter_for(question, user_year, user_block, today)
+        chunks = scope_boost(chunks, year, blocks, config.SCOPE_BOOST_BLOCK, config.SCOPE_BOOST_YEAR)
+    chunks = chunks[:n]
     reranked_at = time.perf_counter()
     text = generate(question, chunks[:k], describe(student) if student else "")
     finished = time.perf_counter()
