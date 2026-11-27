@@ -108,3 +108,6 @@ COLBERT_COLLECTION = f"{COLLECTION}_colbert"
 BM25_COLLECTION = f"{COLLECTION}_bm25"
 # Downloaded model files (git-ignored). fastembed's default is the temp folder, which Windows cleans up.
 MODEL_CACHE = PROJECT_ROOT / "models"
+
+# Student profiles (study year per user, see profile_store.py). Git-ignored: it is user data.
+PROFILE_DB = Path(os.getenv("PROFILE_DB", str(PROJECT_ROOT / "data" / "profiles.sqlite3")))

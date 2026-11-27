@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Study assistant</title>
+<style>
+  :root { --bg: #f7f7f5; --panel: #fff; --text: #1d1d1f; --muted: #6b6b70; --line: #e2e2e0; --accent: #2b59c3; --accent-text: #fff; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #151517; --panel: #1f1f22; --text: #ececee; --muted: #9a9aa0; --line: #333338; --accent: #7aa2ff; --accent-text: #0d0d10; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 system-ui, sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; min-height: 100vh; gap: 12px; }
+  header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  h1 { font-size: 1.15rem; margin: 0; }
+  #where { color: var(--muted); font-size: .95rem; }
+  button, .link { font: inherit; cursor: pointer; }
+  .link { background: none; border: 0; color: var(--accent); padding: 0 0 0 8px; text-decoration: underline; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+  #ask-year .choices { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .choice, #send { background: var(--accent); color: var(--accent-text); border: 0; border-radius: 8px; padding: 8px 16px; }
+  #log { flex: 1; display: flex; flex-direction: column; gap: 12px; }
+  .q { align-self: flex-end; max-width: 85%; background: var(--accent); color: var(--accent-text); border-radius: 10px; padding: 8px 12px; white-space: pre-wrap; }
+  .a { white-space: pre-wrap; }
+  .a ol { margin: 8px 0 0; padding-left: 24px; font-size: .9rem; white-space: normal; }
+  .a a { color: var(--accent); }
+  .error { color: #c0392b; }
+  form { display: flex; gap: 8px; position: sticky; bottom: 0; background: var(--bg); padding: 8px 0; }
+  #question { flex: 1; font: inherit; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Study assistant</h1>
+    <div id="where" hidden><span id="label"></span><button class="link" id="change" type="button">change year</button></div>
+  </header>
+
+  <section id="ask-year" class="card" hidden>
+    <div id="ask-text">Which study year are you in?</div>
+    <div class="choices">
+      <button class="choice" type="button" data-year="Year1">Year 1</button>
+      <button class="choice" type="button" data-year="Year2">Year 2</button>
+      <button class="choice" type="button" data-year="Year3">Year 3</button>
+    </div>
+  </section>
+
+  <section id="log" aria-live="polite"></section>
+
+  <form id="ask" hidden>
+    <label for="question" hidden>Question</label>
+    <input id="question" autocomplete="off" placeholder="Ask about your courses, deadlines, this week..." required>
+    <button id="send">Ask</button>
+  </form>
+</main>
+<script>
+  // The server keeps the study year (cookie + PUT /profile) and works out the block from today's date.
+  // ?today=YYYY-MM-DD in this page's address is passed on, to try other dates (summer, a new academic year).
+  const today = new URLSearchParams(location.search).get("today");
+  const withToday = (params) => new URLSearchParams(today ? { ...params, today } : params);
+  const $ = (id) => document.getElementById(id);
+
+  function show(profile) {
+    const asking = profile.ask_year;
+    $("ask-year").hidden = !asking;
+    $("ask").hidden = asking;
+    $("where").hidden = asking;
+    $("ask-text").textContent = asking && profile.year
+      ? `A new academic year (${profile.academic_year}) has started. Which study year are you in now?`
+      : "Which study year are you in?";
+    $("label").textContent = profile.label;
+    if (!asking) $("question").focus();
+  }
+
+  async function loadProfile() {
+    show(await (await fetch("/profile?" + withToday({}))).json());
+  }
+
+  async function saveYear(year) {
+    const response = await fetch("/profile?" + withToday({}), {
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ year }),
+    });
+    show(await response.json());
+  }
+
+  function add(cls, text) {
+    const div = document.createElement("div");
+    div.className = cls;
+    div.textContent = text;  // text, never HTML: answers can contain anything
+    $("log").append(div);
+    div.scrollIntoView({ block: "end" });
+    return div;
+  }
+
+  function addSources(div, sources) {
+    if (!sources.length) return;
+    const list = document.createElement("ol");
+    for (const s of sources) {
+      const item = document.createElement("li");
+      const link = document.createElement("a");
+      link.textContent = s.title;
+      if (/^https?:\/\//.test(s.source)) { link.href = s.source; link.target = "_blank"; link.rel = "noopener"; }
+      item.append(link);
+      list.append(item);
+    }
+    div.append(list);
+  }
+
+  async function ask(event) {
+    event.preventDefault();
+    const q = $("question").value.trim();
+    if (!q) return;
+    $("question").value = "";
+    add("q", q);
+    const answer = add("a card", "Thinking...");
+    $("send").disabled = true;
+    try {
+      const response = await fetch("/ask?" + withToday({ q }));
+      if (response.status === 409) {  // the year must be asked (again) first
+        answer.textContent = "First tell me your study year, then ask again.";
+        await loadProfile();
+        return;
+      }
+      if (!response.ok) throw new Error(`the server answered ${response.status}`);
+      const data = await response.json();
+      answer.textContent = data.answer;
+      addSources(answer, data.sources);
+      $("label").textContent = data.student.label;
+    } catch (error) {
+      answer.textContent = `Something went wrong: ${error.message}.`;
+      answer.classList.add("error");
+    } finally {
+      $("send").disabled = false;
+    }
+  }
+
+  document.querySelectorAll(".choice").forEach((b) => b.addEventListener("click", () => saveYear(b.dataset.year)));
+  $("change").addEventListener("click", () => show({ ask_year: true, year: null }));
+  $("ask").addEventListener("submit", ask);
+  loadProfile();
+</script>
+</body>
+</html>

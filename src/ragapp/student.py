@@ -42,6 +42,14 @@ def _pages() -> dict[str, str]:
     return {doc.id: doc.text for doc in load_documents(config.CORPUS_PATH)}
 
 
+def no_block_reason(today: date, year: str) -> str:
+    """Why the calendar puts today in no block of this year ("summer holiday"), or "" when it does."""
+    info = day_info(today, year)
+    if info.block:
+        return ""
+    return info.name or "the date is not in the academic calendar"
+
+
 def _calendar_day(ctx: StudentContext) -> DayInfo | None:
     """Today in the academic calendar, if the calendar puts today in the student's block (else None)."""
     if not ctx.year or not ctx.block:
@@ -80,7 +88,8 @@ def describe(ctx: StudentContext, with_plan: bool = True) -> str:
     where = f"{readable_year}, {readable_block}" if readable_block else readable_year
     info = _calendar_day(ctx)
     if info is None:
-        return f"{text} The student is in {where}."
+        reason = "" if ctx.block else no_block_reason(ctx.today, ctx.year)
+        return f"{text} The student is in {where}." + (f" The block is not known today ({reason})." if reason else "")
     if info.week is None:
         return f"{text} The student is in {where}." + (f" This week is the {info.name}." if info.name else "")
     monday = ctx.today - timedelta(days=ctx.today.weekday())
