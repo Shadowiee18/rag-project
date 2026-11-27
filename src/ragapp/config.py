@@ -35,6 +35,11 @@ STUDENT_LINE_AS_SOURCE = os.getenv("STUDENT_LINE_AS_SOURCE", "0") == "1"
 # The eval's local judge stays the same model whatever answers, so correctness numbers stay comparable.
 JUDGE_MODEL = "qwen3:8b"
 
+# Tracing (see tracing.py): every step of every question as an OpenTelemetry span, e.g. into a local Langfuse.
+TRACING = os.getenv("TRACING", "0") == "1"
+# Record questions, queries and answers in the spans (user content; off by default, as in OpenTelemetry's GenAI rules).
+TRACE_CONTENT = os.getenv("TRACE_CONTENT", "0") == "1"
+
 # Qdrant (started with `docker compose up -d`)
 QDRANT_URL = "http://localhost:6333"
 # Apply the corpus-EDA cleaning rules at ingest (see cleaning.py). Needs a re-ingest when changed.

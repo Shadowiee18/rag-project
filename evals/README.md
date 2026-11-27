@@ -19,6 +19,7 @@ uv run python evals/groups.py --run my_run # a saved dev run's numbers per quest
 | `groups.py` | coverage (questions per question type x segment) and a saved dev run's numbers per group |
 | `score.py` | judge agreement (Cohen's kappa) and chunk-level evidence from saved runs |
 | `scope_eval.py` | retrieval only: saves reranked candidates once, then tunes the scope bonus offline; counter-examples |
+| `push_scores.py` | attaches a traced run's grades (Claude's, and the right page's rank) to its traces in Langfuse |
 | `judge_rubric.md` | rubric for the strong judge (correctness, faithfulness, citations) |
 | `golden_set.example.jsonl` | the question-file format |
 | `results/*_summary.json` | the numbers of every run (committed); per-question files stay local (course material) |

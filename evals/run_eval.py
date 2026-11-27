@@ -23,6 +23,7 @@ from ragapp.rerank import load_model
 from ragapp.documents import load_documents
 from ragapp.rag import answer as rag_answer
 from ragapp.student import StudentContext, describe
+from ragapp.tracing import setup as setup_tracing
 
 from groups import group_summary, segment
 
@@ -128,6 +129,7 @@ def evaluate_one(item: dict, student: StudentContext | None = None, judge: str =
     result = {
         **item,
         "student": describe(student) if student else None,
+        "trace_id": out.get("trace_id"),  # with TRACING=1: push_scores.py attaches the grades to this trace
         "search_query": out["search_query"],
         "answer": answer_text,
         "retrieved_doc_ids": doc_ids,
@@ -244,6 +246,7 @@ def main() -> None:
     parser.add_argument("--split", choices=["dev", "test", "all"], default="dev",
                         help="dev: tune and inspect failures here. test: held out, report totals only.")
     args = parser.parse_args()
+    setup_tracing()  # TRACING=1: every eval question becomes a trace
 
     items = [json.loads(line) for line in Path(args.golden).read_text(encoding="utf-8").splitlines() if line.strip()]
     if args.split != "all":
