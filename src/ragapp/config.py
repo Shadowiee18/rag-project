@@ -33,9 +33,9 @@ BUAS_LLM_API_KEY = os.getenv("BUAS_LLM_API_KEY", "")
 # 1: the answer prompt treats the calendar-based Student line as a source (see generate.py). Off until measured.
 STUDENT_LINE_AS_SOURCE = os.getenv("STUDENT_LINE_AS_SOURCE", "0") == "1"
 # 1: add calendar facts to the prompt (calendar_facts.py): today's week or break, the student's block, and the dates of
-# every week / day / block the question refers to, from calendar.yaml; the prompt counts them as a source. Off until
-# measured (evals/README.md, "Phase 3 step 6").
-CALENDAR_FACTS = os.getenv("CALENDAR_FACTS", "0") == "1"
+# every week / day / block the question refers to, from calendar.yaml; the prompt counts them as a source. On by the
+# student's decision although the rule said no (one dev answer worse; evals/README.md, "Phase 3 step 6"). 0 = off.
+CALENDAR_FACTS = os.getenv("CALENDAR_FACTS", "1") == "1"
 # The eval's local judge stays the same model whatever answers, so correctness numbers stay comparable.
 JUDGE_MODEL = "qwen3:8b"
 
