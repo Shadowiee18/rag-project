@@ -77,11 +77,9 @@ def test_retrieval_spans_show_pages_scores_and_scope(pipeline):
     assert json.loads(rerank.attributes["langfuse.observation.output"])[0]["doc_id"] == "Year2/BlockC"
 
 
-def test_generation_span_names_the_model(pipeline):
+def test_generate_step_shows_the_pages_the_model_saw(pipeline):
     pipeline()
     generate = spans()["generate"]
-    assert generate.attributes["langfuse.observation.type"] == "generation"
-    assert generate.attributes["gen_ai.request.model"] == config.LLM_MODEL
     assert json.loads(generate.attributes["langfuse.observation.metadata.context_pages"]) == ["Year2/BlockC", "General/Rules"]
 
 
@@ -145,3 +143,107 @@ def test_setup_sends_spans_over_otlp_with_tracing_on(monkeypatch):
     assert tracing.setup() is True
     (provider,) = installed
     assert provider.resource.attributes["service.name"] == "ragapp"
+
+
+# ---------------------------------------------------------------- every LLM call: model and tokens
+
+import ragapp.llm as llm  # noqa: E402
+
+
+class _Reply:
+    """A fake Ollama reply with its token counts."""
+
+    def __init__(self, text, prompt_eval_count=None, eval_count=None):
+        self.message = type("m", (), {"content": text})
+        self.prompt_eval_count, self.eval_count = prompt_eval_count, eval_count
+
+
+class _Http:
+    def __init__(self, body):
+        self.status_code, self._body, self.text = 200, body, str(body)
+
+    def json(self):
+        return self._body
+
+
+def llm_span():
+    (span,) = [s for s in EXPORTER.get_finished_spans() if s.name == "llm"]
+    return span
+
+
+@pytest.fixture
+def no_content(monkeypatch):
+    EXPORTER.clear()
+    monkeypatch.setattr(config, "TRACE_CONTENT", False)
+
+
+def test_ollama_call_is_a_generation_with_model_and_tokens(no_content, monkeypatch):
+    monkeypatch.setattr(config, "LLM_BACKEND", "ollama")
+    monkeypatch.setattr(config, "LLM_MODEL", "qwen3:8b")
+    monkeypatch.setattr(llm.ollama, "chat", lambda **kw: _Reply("answer", prompt_eval_count=812, eval_count=64))
+    assert llm.chat([{"role": "user", "content": "hi"}]) == "answer"
+    span = llm_span()
+    assert span.attributes["langfuse.observation.type"] == "generation"
+    assert span.attributes["langfuse.observation.model.name"] == "qwen3:8b"
+    assert json.loads(span.attributes["langfuse.observation.usage_details"]) == {"input": 812, "output": 64}
+    assert span.attributes["gen_ai.usage.input_tokens"] == 812 and span.attributes["gen_ai.usage.output_tokens"] == 64
+
+
+def test_buas_call_records_the_usage_the_api_reports(no_content, monkeypatch):
+    monkeypatch.setattr(config, "LLM_BACKEND", "buas")
+    monkeypatch.setattr(config, "LLM_MODEL", "qwen3.8-27b")
+    monkeypatch.setattr(config, "BUAS_LLM_BASE_URL", "https://llm.example/v1")
+    monkeypatch.setattr(config, "BUAS_LLM_API_KEY", "test-key")
+    body = {"choices": [{"message": {"content": "answer"}}],
+            "usage": {"prompt_tokens": 1500, "completion_tokens": 120, "total_tokens": 1620}}
+    monkeypatch.setattr(llm.httpx, "post", lambda url, **kw: _Http(body))
+    assert llm.chat([{"role": "user", "content": "hi"}]) == "answer"
+    span = llm_span()
+    assert span.attributes["langfuse.observation.model.name"] == "qwen3.8-27b"
+    assert span.attributes["langfuse.observation.metadata.backend"] == "buas"
+    assert json.loads(span.attributes["langfuse.observation.usage_details"]) == {"input": 1500, "output": 120}
+
+
+def test_no_usage_reported_means_no_usage_recorded(no_content, monkeypatch):
+    monkeypatch.setattr(config, "LLM_BACKEND", "ollama")
+    monkeypatch.setattr(llm.ollama, "chat", lambda **kw: _Reply("answer"))
+    llm.chat([{"role": "user", "content": "hi"}])
+    assert "langfuse.observation.usage_details" not in llm_span().attributes
+
+
+def test_llm_prompt_and_reply_are_content(no_content, monkeypatch):
+    monkeypatch.setattr(config, "LLM_BACKEND", "ollama")
+    monkeypatch.setattr(llm.ollama, "chat", lambda **kw: _Reply("the secret answer", 10, 2))
+    llm.chat([{"role": "user", "content": "my private question"}])
+    assert "private question" not in json.dumps(dict(llm_span().attributes))
+    assert "secret answer" not in json.dumps(dict(llm_span().attributes))
+    EXPORTER.clear()
+    monkeypatch.setattr(config, "TRACE_CONTENT", True)
+    llm.chat([{"role": "user", "content": "my private question"}])
+    attrs = llm_span().attributes
+    assert json.loads(attrs["langfuse.observation.input"]) == [{"role": "user", "content": "my private question"}]
+    assert json.loads(attrs["langfuse.observation.output"]) == "the secret answer"
+
+
+def test_answer_trace_has_an_llm_call_under_generate(monkeypatch):
+    """With the real generate(): the answer's LLM call is a child of the generate step."""
+    EXPORTER.clear()
+    import ragapp.generate as generate_module
+
+    monkeypatch.setattr(config, "QUERY_REWRITE", "3")
+    monkeypatch.setattr(config, "RERANK_MODEL", "")
+    monkeypatch.setattr(config, "LLM_BACKEND", "ollama")
+    monkeypatch.setattr(rag, "retrieve_many", lambda *a, **k: [chunk("General/Rules", 1.0)])
+    monkeypatch.setattr(rag, "describe", lambda student, **kwargs: "")
+    monkeypatch.setattr(rag, "generate", generate_module.generate)
+    monkeypatch.setattr(llm.ollama, "chat", lambda **kw: _Reply("answer [1]", 300, 20))
+    rag.answer(QUESTION, k=1, student=STUDENT)
+    found = spans()
+    assert found["llm"].parent.span_id == found["generate"].context.span_id
+    assert found["generate"].attributes.get("langfuse.observation.type") != "generation"  # one generation per call
+
+
+def test_answer_result_carries_its_trace_id(pipeline):
+    """So an eval run can attach its grades to the trace afterwards."""
+    result = pipeline()
+    assert result["trace_id"] == format(spans()["answer"].context.trace_id, "032x")

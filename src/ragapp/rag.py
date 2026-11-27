@@ -63,15 +63,15 @@ def answer(
         chunks = chunks[:n]
         reranked_at = time.perf_counter()
 
-        with tracer.start_as_current_span("generate") as span:
-            span.set_attribute("gen_ai.request.model", config.LLM_MODEL)
+        with tracer.start_as_current_span("generate") as span:  # its LLM call is a child step (llm.chat)
             text = generate(question, chunks[:k], describe(student) if student else "")
-            record(span, "generation", output=text, content=True, backend=config.LLM_BACKEND,
-                   context_pages=[c["doc_id"] for c in chunks[:k]])
+            record(span, context_pages=[c["doc_id"] for c in chunks[:k]])
         record(root, output=text, content=True)
+        trace_id = format(root.get_span_context().trace_id, "032x") if root.get_span_context().is_valid else None
     finished = time.perf_counter()
     return {
         "question": question,
+        "trace_id": trace_id,  # to look the question up in Langfuse, or attach eval grades to it (None: tracing off)
         "search_query": search_query,
         "answer": text,
         "chunks": chunks,
