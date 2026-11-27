@@ -1,0 +1,128 @@
+{
+  "questions": 32,
+  "answerable": 28,
+  "unanswerable": 4,
+  "retrieval": {
+    "hit@1": 0.857,
+    "hit@3": 1.0,
+    "hit@5 (what the LLM sees)": 1.0,
+    "hit@10": 1.0,
+    "mrr@10": 0.917,
+    "all_sources_in_context": 0.929,
+    "evidence_found@5": 0.836,
+    "all_evidence_found@5": 0.714,
+    "evidence_found@10": 0.911
+  },
+  "answers (answerable, LLM-judged)": {
+    "graded_by": "Claude, afterwards: evals/score.py <run>",
+    "correct": null,
+    "partial": null,
+    "wrong": null,
+    "false_refusals": 0.036,
+    "cites_sources": 1.0
+  },
+  "unanswerable_correctly_refused": 1.0,
+  "latency_s": {
+    "generate_median": 2.54,
+    "total_median": 4.97,
+    "total_max": 8.92
+  },
+  "config": {
+    "embed_model": "qwen3-embedding:0.6b",
+    "llm_backend": "buas",
+    "student_line_as_source": false,
+    "llm_model": "qwen3.8-27b",
+    "calendar_facts": true,
+    "judge_model": "qwen3:8b",
+    "chunk_size": 1500,
+    "chunk_overlap": 200,
+    "top_k": 5,
+    "chunk_headers": true,
+    "filter_by_question_year": true,
+    "scope_mode": "filter",
+    "scope_boost_block": 0.2,
+    "scope_boost_year": 0.0,
+    "query_rewrite": "2",
+    "user_year": "simulated",
+    "collection": "adsai_chunks_clean",
+    "clean_corpus": true,
+    "exclude_templates": true,
+    "rerank_model": "BAAI/bge-reranker-base",
+    "rerank_candidates": 30,
+    "rerank_max_words": 0,
+    "rerank_kind": "colbert",
+    "rerank_int8": false,
+    "hybrid": true,
+    "judge_rules": 2,
+    "split": "dev",
+    "judge": "claude",
+    "golden": "golden_set.jsonl"
+  },
+  "by_question_type": {
+    "concept": {
+      "questions": 8,
+      "hit@5": 1.0,
+      "all_evidence@5": 0.5
+    },
+    "deadline": {
+      "questions": 1,
+      "hit@5": 1.0,
+      "all_evidence@5": 1.0
+    },
+    "howto": {
+      "questions": 6,
+      "hit@5": 1.0,
+      "all_evidence@5": 0.667
+    },
+    "out_of_scope": {
+      "questions": 4,
+      "refused": 1.0
+    },
+    "overview": {
+      "questions": 5,
+      "hit@5": 1.0,
+      "all_evidence@5": 1.0
+    },
+    "rules": {
+      "questions": 8,
+      "hit@5": 1.0,
+      "all_evidence@5": 0.75
+    }
+  },
+  "by_segment": {
+    "Year1 BlockA": {
+      "questions": 1,
+      "hit@5": 1.0,
+      "all_evidence@5": 1.0
+    },
+    "Year1 BlockC": {
+      "questions": 1,
+      "hit@5": 1.0,
+      "all_evidence@5": 1.0
+    },
+    "Year2 BlockD": {
+      "questions": 1,
+      "hit@5": 1.0,
+      "all_evidence@5": 1.0
+    },
+    "Year3 Semester1": {
+      "questions": 1,
+      "hit@5": 1.0,
+      "all_evidence@5": 1.0
+    },
+    "none": {
+      "questions": 4,
+      "refused": 1.0
+    },
+    "several": {
+      "questions": 3,
+      "hit@5": 1.0,
+      "all_evidence@5": 1.0
+    },
+    "shared": {
+      "questions": 21,
+      "hit@5": 1.0,
+      "all_evidence@5": 0.619
+    }
+  }
+}

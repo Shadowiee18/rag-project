@@ -1,0 +1,28 @@
+{
+  "cases": 13,
+  "right_wrong_abstained": {
+    "day": {
+      "right": 0,
+      "wrong": 3,
+      "abstained": 4
+    },
+    "total": {
+      "right": 1,
+      "wrong": 4,
+      "abstained": 8,
+      "crag": -0.23
+    },
+    "week (breaks)": {
+      "right": 1,
+      "wrong": 0,
+      "abstained": 2
+    },
+    "week (teaching days)": {
+      "right": 0,
+      "wrong": 1,
+      "abstained": 2
+    }
+  },
+  "calendar_facts": false,
+  "llm_model": "qwen3.8-27b"
+}
