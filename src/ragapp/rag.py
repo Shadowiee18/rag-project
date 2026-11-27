@@ -1,6 +1,6 @@
 """The whole pipeline: question (+ who/when) -> rewrite -> retrieve -> generate -> answer + sources.
 
-Run:  uv run python -m ragapp.rag "whats due this week" --year Year2 --block BlockB
+Run:  uv run python -m ragapp.rag "whats due this week" --year Year2    (block: from today's date, or --block BlockB)
 """
 
 import argparse
@@ -10,6 +10,7 @@ from datetime import date
 from ragapp import config
 from ragapp.calendar_facts import calendar_facts
 from ragapp.generate import generate
+from ragapp.profile import student_context
 from ragapp.rerank import rerank
 from ragapp.retrieve import filter_for, retrieve, retrieve_many, scope_boost
 from ragapp.rewrite import rewrite_query, search_queries, week_queries
@@ -99,7 +100,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("question", nargs="+")
     parser.add_argument("--year", default="", help="e.g. Year2")
-    parser.add_argument("--block", default="", help="e.g. BlockB")
+    parser.add_argument("--block", default="", help="e.g. BlockB; default: the block the calendar puts today in")
     parser.add_argument("--today", default="", help="YYYY-MM-DD, default: today")
     args = parser.parse_args()
     setup_tracing()
@@ -107,7 +108,7 @@ def main() -> None:
     student = None
     if args.year or args.today:
         today = date.fromisoformat(args.today) if args.today else date.today()
-        student = StudentContext(today=today, year=args.year, block=args.block)
+        student = student_context(args.year, today, args.block) if args.year else StudentContext(today)
 
     result = answer(" ".join(args.question), student=student)
     print(f"\nQ: {result['question']}")
