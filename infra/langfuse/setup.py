@@ -65,6 +65,10 @@ def app_env(env: dict[str, str]) -> dict[str, str]:
         "TRACING": "1",
         "OTEL_EXPORTER_OTLP_ENDPOINT": f"{WEB_URL}/api/public/otel",
         "OTEL_EXPORTER_OTLP_HEADERS": f"Authorization=Basic%20{auth},x-langfuse-ingestion-version=4",
+        # for evals/push_scores.py (Langfuse's REST API)
+        "LANGFUSE_HOST": WEB_URL,
+        "LANGFUSE_PUBLIC_KEY": env["LANGFUSE_INIT_PROJECT_PUBLIC_KEY"],
+        "LANGFUSE_SECRET_KEY": env["LANGFUSE_INIT_PROJECT_SECRET_KEY"],
     }
 
 

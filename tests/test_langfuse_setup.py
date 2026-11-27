@@ -48,6 +48,8 @@ def test_app_header_is_basic_auth_with_the_project_keys():
     assert scheme == "Basic"
     assert base64.b64decode(encoded).decode() == f"{env['LANGFUSE_INIT_PROJECT_PUBLIC_KEY']}:{env['LANGFUSE_INIT_PROJECT_SECRET_KEY']}"
     assert headers["x-langfuse-ingestion-version"] == "4"
+    assert (app["LANGFUSE_PUBLIC_KEY"], app["LANGFUSE_SECRET_KEY"]) == (
+        env["LANGFUSE_INIT_PROJECT_PUBLIC_KEY"], env["LANGFUSE_INIT_PROJECT_SECRET_KEY"])
 
 
 def test_env_file_has_no_quotes_or_spaces_around_equals():

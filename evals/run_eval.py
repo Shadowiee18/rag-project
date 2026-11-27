@@ -129,6 +129,7 @@ def evaluate_one(item: dict, student: StudentContext | None = None, judge: str =
     result = {
         **item,
         "student": describe(student) if student else None,
+        "trace_id": out.get("trace_id"),  # with TRACING=1: push_scores.py attaches the grades to this trace
         "search_query": out["search_query"],
         "answer": answer_text,
         "retrieved_doc_ids": doc_ids,
