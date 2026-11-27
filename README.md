@@ -205,7 +205,10 @@ folder (the BUas service needs the campus network or VPN). Embeddings and the ev
 ### Tracing (optional): every step of every question in Langfuse
 
 With `TRACING=1` each question becomes one trace: the search queries, the candidate pages and their scores, the
-reranked order, the model and the pages it saw, with the time of each step. The spans are plain OpenTelemetry (OTLP
+reranked order, the pages the model saw, and every LLM call with its model and token counts, with the time of each
+step. An eval run made with tracing on can get its grades attached to each question's trace:
+`uv run python evals/push_scores.py <run>` (Claude's correctness, faithfulness and citation grades, and the rank of
+the right page). The spans are plain OpenTelemetry (OTLP
 over HTTP), so any compatible backend works; the setup below runs a self-hosted [Langfuse](https://langfuse.com) on
 your own PC, because traces contain course page ids.
 
