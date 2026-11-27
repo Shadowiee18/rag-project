@@ -166,7 +166,7 @@ def pipeline(monkeypatch):
     monkeypatch.setattr(config, "RERANK_MODEL", "x")
     monkeypatch.setattr(rag, "retrieve_many", lambda *args, **kwargs: list(found))
     monkeypatch.setattr(rag, "rerank", lambda question, chunks: chunks)
-    monkeypatch.setattr(rag, "generate", lambda question, chunks, context: "answer")
+    monkeypatch.setattr(rag, "generate", lambda question, chunks, context, calendar=(): "answer")
     monkeypatch.setattr(rag, "describe", lambda student, **kwargs: "")
     monkeypatch.setattr(config, "SCOPE_BOOST_BLOCK", 0.2)
     monkeypatch.setattr(config, "SCOPE_BOOST_YEAR", 0.0)

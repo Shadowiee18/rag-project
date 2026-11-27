@@ -620,3 +620,64 @@ ties -> smaller weights; then one check on the held-out test split with those we
 - **What would separate the two cases is the question's intent, not its scope**: whether it asks about the block
   itself or only mentions it. That points to a learned signal (a reranker fine-tuned on our own question -> page pairs,
   or a question-type field in one query plan), measured on these same counter-examples, rather than another rule.
+
+## Phase 3 step 6: calendar questions answered from the calendar (`CALENDAR_FACTS=1`)
+
+Calendar questions failed because the facts were in `calendar.yaml` but only today's week reached the model (the
+Student line). Code now finds the time and block words in the question with the resolver (week N, next / last week,
+a date, tomorrow, a weekday, next / last block or semester, a named block) and adds the matching calendar facts to the
+prompt as a "Calendar" section: today's week or break, that week's dates, whether a day is a break or a closed day,
+a block's start, end, breaks and closed days. The model still writes the answer; the prompt counts the Calendar lines
+as a source (no citation needed). Chosen with the student over answering in code: one mechanism for every question,
+also mixed ones ("what is due in week 3?"), and no router that has to decide what counts as "only a calendar question".
+
+**Adoption rule, fixed before the first run** (agreed with the student, not changed after):
+1. Behavioural suite, `qwen3.8-27b`: total wrong answers no more than before (5), no family gets more wrong answers or
+   fewer right ones, and the CRAG score goes up. Right / wrong / abstained as in the table above: a case that fails
+   is "wrong" when the answer names a week (week family) or a date (date families), else "abstained"
+   (`behavioral.py` `outcome`; it reproduces every earlier row exactly).
+2. Development split, page and student sets (`--user-year simulated`): right page first and in the top 5 not lower,
+   and Claude's blind grading (rubric v1.2, the Calendar lines count as context like the Student line) gives no fewer
+   correct and no more wrong answers than the baseline. A tie passes.
+Before and after are run on the same day, same code, switch off then on.
+
+### Result: not adopted by the rule (the student dev set lost one correct answer); `CALENDAR_FACTS` stays off
+
+Same code, same day, switch off then on (`cal_off` / `cal_on`, `dev_cal_off_*` / `dev_cal_on_*`); answering model
+`qwen3.8-27b`. The "off" suite run reproduced the earlier baseline exactly (68 / 5 / 44).
+
+| Behavioural suite, right / wrong / abstained | Off | On |
+|---|---|---|
+| Which week, teaching days (60) | 60 / 0 / 0 | 60 / 0 / 0 |
+| Which week, breaks (30) | 7 / 5 / 18 | **30 / 0 / 0** |
+| Dates of week N (20) | 1 / 0 / 19 | **20 / 0 / 0** |
+| Next block starts (7) | 0 / 0 / 7 | **7 / 0 / 0** |
+| **Total (117), CRAG score** | 68 / 5 / 44, +0.54 | **117 / 0 / 0, +1.00** |
+| DIR next + last block, top result (18) | 3 | 3 (retrieval is unchanged by design) |
+| Held-out sanity set, other wordings (13, `calendar_sanity.py`) | 1 / 4 / 8 | **13 / 0 / 0** |
+
+| Development split (Claude, blind, rubric v1.2; 102 answers mixed) | Page (32) off → on | Student (19) off → on |
+|---|---|---|
+| Right page first / in top 5 | 24 / 28 → 24 / 28 (same top 5 for all 32) | 6 / 11 → 6 / 11 (same top 5 for all 19) |
+| Correct / partial / wrong (answerable) | 23 / 4 / 1 → 23 / 4 / 1 | 4 / 6 / 7 → **3** / 7 / 7 |
+| Faithful | 32 → 32 | 17 → 15 |
+| Unanswerable correctly refused | 4/4 → 4/4 | 2/2 → 2/2 |
+| Median time per answer | 4.8 → 5.0 s | 5.1 → 4.9 s |
+
+- **Calendar questions are solved**: every break, week-dates and next-block answer in the suite was read by Claude as
+  well as scored by code, and all are right (a holiday gets "no week number", not a guessed week). The sanity set's
+  13 differently worded questions, two with no time words at all, are all right too.
+- **The rule fails on one dev question**, so the default stays off. Student set: one answer better (s12, wrong ->
+  partial), one worse (s27, correct -> wrong; McNemar p = 1.0). s27 ("how long is the presentation") had no calendar
+  reference; with the facts the model listed other courses' presentation lengths next to its own block's instead of
+  only its block's. Three answers lost "faithful" (s06, s10, s27) and one gained it (s32: it no longer mixed up the
+  student's block); only s06's unsupported claim uses calendar dates (it guessed this week's feedback days).
+- Whether that is noise or a real cost of ~100 extra words in every prompt cannot be told from one run: the same
+  27B setup gave 6 correct on this set in an earlier run and 4 today with no change. The rule was set before the run
+  and is not changed after seeing it.
+- Side effects seen in the answers: the model often cites the facts as "[Calendar]" (the prompt says no citation
+  is needed); and for "when do Block B lectures begin?" (sanity case 13) the calendar's week start (Mon 9 Nov) won
+  over a course page that may give the first lecture day; the sanity set's own gold followed the calendar.
+- What would be measurable next, as its own experiment with a rule set beforehand: facts only when the question has
+  a time or block reference or today is not a teaching day (s27 would then get none), or repeated runs to measure the
+  dev set's run-to-run noise.

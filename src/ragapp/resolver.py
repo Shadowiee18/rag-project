@@ -215,8 +215,8 @@ def resolve_time(ref: str, today: date, target: BlockTarget | None = None) -> Da
         offset = {"this": 0, "next": 1, "last": -1}[m.group(1)]
         monday = today - timedelta(days=today.weekday()) + timedelta(weeks=offset)
         return DateRange(monday, monday + timedelta(days=4))
-    if m := re.fullmatch(r"(?:week|wk|w) ?(\d{1,2})", ref):
-        return _week_n(int(m.group(1)), today, target)
+    if (n := week_number(ref)) is not None:
+        return _week_n(n, today, target)
     day = _parse_date(ref, today)
     return _one_day(day) if day else None
 
@@ -230,15 +230,27 @@ def _clean(ref: str) -> str:
     return re.sub(r"^(?:on|the) ", "", " ".join(ref.lower().split()))
 
 
-def _week_n(n: int, today: date, target: BlockTarget | None) -> DateRange | None:
-    if target is None or not target.blocks:
+def week_number(ref: str) -> int | None:
+    """'week 3' / 'wk 3' / 'w3' -> 3; None for anything else."""
+    m = re.fullmatch(r"(?:week|wk|w) ?(\d{1,2})", _clean(ref))
+    return int(m.group(1)) if m else None
+
+
+def teaching_weeks(target: BlockTarget, today: date) -> list[Week] | None:
+    """The target's teaching weeks in order (week N is the Nth; a Year 3 semester runs on through both blocks),
+    from the academic year it is in. None when that year is not in calendar.yaml, or for a whole year."""
+    if not target.blocks:
         return None
     years = load_calendar()
     now = next((i for i, y in enumerate(years) if y.start <= today <= y.end), None)
     if now is None or not 0 <= now + target.years_ahead < len(years):
         return None
-    weeks = _teaching_weeks(years[now + target.years_ahead], target.blocks)
-    if not 1 <= n <= len(weeks):
+    return _teaching_weeks(years[now + target.years_ahead], target.blocks)
+
+
+def _week_n(n: int, today: date, target: BlockTarget | None) -> DateRange | None:
+    weeks = teaching_weeks(target, today) if target else None
+    if not weeks or not 1 <= n <= len(weeks):
         return None
     monday = weeks[n - 1].monday
     return DateRange(monday, monday + timedelta(days=4))
@@ -285,7 +297,8 @@ def resolve_block(ref: str, today: date, year: str, block: str = "") -> BlockTar
     """A block reference -> the year/block it means, from the student's year and block.
 
     "" / my / this / current block -> the student's own; next / last / previous block -> the neighbour in
-    SEGMENTS (across the academic year after Block D); named: "Year 1 Block C", "block c" (own year),
+    SEGMENTS (across the academic year after Block D); next / last / previous semester -> the semester next to the
+    student's (Year 1-2: its two blocks); named: "Year 1 Block C", "block c" (own year),
     "Y1C", "semester 2", "Year 1". Without a block in the context, the block is taken from today's date.
     None when the reference cannot be resolved.
     """
@@ -301,7 +314,23 @@ def resolve_block(ref: str, today: date, year: str, block: str = "") -> BlockTar
             return None
         target_year, target_block = SEGMENTS[i]
         return BlockTarget(target_year, (target_block,), int(target_year[-1]) - int(year[-1]))
+    if m := re.fullmatch(r"(next|last|previous) semester", ref):
+        return _next_semester(own, year, today, 1 if m.group(1) == "next" else -1) if own else None
     return _named_block(ref, year, today)
+
+
+def _next_semester(own: str, year: str, today: date, step: int) -> BlockTarget | None:
+    """The semester before or after the student's own, across study years (Year 1 semester 2 -> Year 2 semester 1)."""
+    calendar = _year_of(today) or load_calendar()[-1]
+    semester = int(own[-1]) if own.startswith("Semester") else next(
+        n for n, letters in calendar.semesters.items() if own[-1] in letters)
+    number, semester = divmod((int(year[-1]) - 1) * 2 + (semester - 1) + step, 2)  # count semesters from Year 1
+    if not 0 <= number <= 2:
+        return None
+    target_year = f"Year{number + 1}"
+    blocks = ((f"Semester{semester + 1}",) if target_year == "Year3"
+              else tuple(f"Block{letter}" for letter in calendar.semesters[semester + 1]))
+    return BlockTarget(target_year, blocks, number + 1 - int(year[-1]))
 
 
 def block_ref_in_question(question: str) -> str:

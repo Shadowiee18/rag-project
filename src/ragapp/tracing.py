@@ -5,6 +5,7 @@
     ├── retrieve   (retriever)   candidates: page ids + scores, and the scope searched
     ├── rerank     (retriever)   the new order
     ├── scope_boost              only with SCOPE_MODE=boost
+    ├── calendar                 only with CALENDAR_FACTS=1: the calendar facts given to the model
     └── generate   (generation)  model, the pages it saw, the answer
 
 Plain OpenTelemetry, so any OTLP backend can show it. The attribute names Langfuse reads (langfuse.observation.*,

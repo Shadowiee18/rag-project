@@ -1,0 +1,116 @@
+{
+  "cases": 135,
+  "passed": 0.889,
+  "per_family": {
+    "week": 1.0,
+    "week_dates": 1.0,
+    "next_start": 1.0,
+    "dir_next": 0.222,
+    "dir_last": 0.111
+  },
+  "per_segment": {
+    "Year1 BlockA": 0.917,
+    "Year1 BlockB": 0.867,
+    "Year1 BlockC": 0.846,
+    "Year1 BlockD": 0.917,
+    "Year2 BlockA": 0.846,
+    "Year2 BlockB": 1.0,
+    "Year2 BlockC": 0.846,
+    "Year2 BlockD": 0.833,
+    "Year3 Semester1": 0.882,
+    "Year3 Semester2": 0.923
+  },
+  "per_family_segment": {
+    "week | Year1 BlockA": "8/8",
+    "week_dates | Year1 BlockA": "2/2",
+    "next_start | Year1 BlockA": "1/1",
+    "dir_next | Year1 BlockA": "0/1",
+    "week | Year1 BlockB": "10/10",
+    "week_dates | Year1 BlockB": "2/2",
+    "next_start | Year1 BlockB": "1/1",
+    "dir_next | Year1 BlockB": "0/1",
+    "dir_last | Year1 BlockB": "0/1",
+    "week | Year1 BlockC": "8/8",
+    "week_dates | Year1 BlockC": "2/2",
+    "next_start | Year1 BlockC": "1/1",
+    "dir_next | Year1 BlockC": "0/1",
+    "dir_last | Year1 BlockC": "0/1",
+    "week | Year1 BlockD": "8/8",
+    "week_dates | Year1 BlockD": "2/2",
+    "dir_next | Year1 BlockD": "1/1",
+    "dir_last | Year1 BlockD": "0/1",
+    "week | Year2 BlockA": "8/8",
+    "week_dates | Year2 BlockA": "2/2",
+    "next_start | Year2 BlockA": "1/1",
+    "dir_next | Year2 BlockA": "0/1",
+    "dir_last | Year2 BlockA": "0/1",
+    "week | Year2 BlockB": "10/10",
+    "week_dates | Year2 BlockB": "2/2",
+    "next_start | Year2 BlockB": "1/1",
+    "dir_next | Year2 BlockB": "1/1",
+    "dir_last | Year2 BlockB": "1/1",
+    "week | Year2 BlockC": "8/8",
+    "week_dates | Year2 BlockC": "2/2",
+    "next_start | Year2 BlockC": "1/1",
+    "dir_next | Year2 BlockC": "0/1",
+    "dir_last | Year2 BlockC": "0/1",
+    "week | Year2 BlockD": "8/8",
+    "week_dates | Year2 BlockD": "2/2",
+    "dir_next | Year2 BlockD": "0/1",
+    "dir_last | Year2 BlockD": "0/1",
+    "week | Year3 Semester1": "12/12",
+    "week_dates | Year3 Semester1": "2/2",
+    "next_start | Year3 Semester1": "1/1",
+    "dir_next | Year3 Semester1": "0/1",
+    "dir_last | Year3 Semester1": "0/1",
+    "week | Year3 Semester2": "10/10",
+    "week_dates | Year3 Semester2": "2/2",
+    "dir_last | Year3 Semester2": "0/1"
+  },
+  "right_wrong_abstained": {
+    "week (teaching days)": {
+      "right": 60,
+      "wrong": 0,
+      "abstained": 0
+    },
+    "total": {
+      "right": 117,
+      "wrong": 0,
+      "abstained": 0,
+      "crag": 1.0
+    },
+    "week (breaks)": {
+      "right": 30,
+      "wrong": 0,
+      "abstained": 0
+    },
+    "week_dates": {
+      "right": 20,
+      "wrong": 0,
+      "abstained": 0
+    },
+    "next_start": {
+      "right": 7,
+      "wrong": 0,
+      "abstained": 0
+    }
+  },
+  "invariance": {
+    "pairs": 45,
+    "consistent": 0.733
+  },
+  "config": {
+    "query_rewrite": "2",
+    "hybrid": true,
+    "rerank_kind": "colbert",
+    "rerank_candidates": 30,
+    "collection": "adsai_chunks_clean",
+    "llm_backend": "buas",
+    "student_line_as_source": false,
+    "llm_model": "qwen3.8-27b",
+    "scope_mode": "filter",
+    "scope_boost_block": 0.2,
+    "scope_boost_year": 0.0,
+    "calendar_facts": true
+  }
+}

@@ -129,6 +129,7 @@ def evaluate_one(item: dict, student: StudentContext | None = None, judge: str =
     result = {
         **item,
         "student": describe(student) if student else None,
+        "calendar": out.get("calendar", []),  # CALENDAR_FACTS=1: the calendar facts the model saw (context for grading)
         "trace_id": out.get("trace_id"),  # with TRACING=1: push_scores.py attaches the grades to this trace
         "search_query": out["search_query"],
         "answer": answer_text,
@@ -220,7 +221,7 @@ def summarise(results: list[dict], user_year_mode: str) -> dict:
         },
         "config": {
             "embed_model": config.EMBED_MODEL, "llm_backend": config.LLM_BACKEND, "student_line_as_source": config.STUDENT_LINE_AS_SOURCE, "llm_model": config.LLM_MODEL,
-            "judge_model": config.JUDGE_MODEL,
+            "calendar_facts": config.CALENDAR_FACTS, "judge_model": config.JUDGE_MODEL,
             "chunk_size": config.CHUNK_SIZE, "chunk_overlap": config.CHUNK_OVERLAP, "top_k": config.TOP_K,
             "chunk_headers": config.CHUNK_HEADERS, "filter_by_question_year": config.FILTER_BY_QUESTION_YEAR,
             "scope_mode": config.SCOPE_MODE, "scope_boost_block": config.SCOPE_BOOST_BLOCK, "scope_boost_year": config.SCOPE_BOOST_YEAR,

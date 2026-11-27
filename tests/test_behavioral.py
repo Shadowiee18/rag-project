@@ -229,3 +229,45 @@ def test_inconsistent_rewording_is_caught():
     pair = [c for c in CASES if c["family"] == "week"][:2]
     results = bh.run(pair, _fake_pipeline(lambda case: "week 1" if case["id"].endswith("-a") else "week 2"))
     assert bh.summarise(results)["invariance"]["consistent"] == 0.0
+
+
+# ---------------------------------------------------------------- right / wrong / abstained
+
+
+@pytest.mark.parametrize(
+    "family,gold,passed,answer,expected",
+    [
+        ("week", {"week": 3}, True, "We are in week 3.", "right"),
+        ("week", {"week": 3}, False, "We are in week 4.", "wrong"),
+        ("week", {"break": "Christmas holiday"}, False, "It is week 8.", "wrong"),
+        ("week", {"break": "Christmas holiday"}, False, "I don't know", "abstained"),
+        ("week_dates", {"dates": ["2026-11-16", "2026-11-20"]}, False, "Week 2 is 9-13 November.", "wrong"),
+        ("week_dates", {"dates": ["2026-11-16", "2026-11-20"]}, False, "I don't know", "abstained"),
+        ("next_start", {"date": "2027-02-01"}, False, "It starts on 8 February.", "wrong"),
+        ("dir_next", {"target": ["Year2", "BlockC"]}, False, "anything", None),  # a search check, not an answer
+    ],
+)
+def test_outcome(family, gold, passed, answer, expected):
+    assert bh.outcome({"family": family, "gold": gold, "passed": passed, "answer": answer}) == expected
+
+
+def test_summary_counts_right_wrong_abstained_per_family_with_breaks_apart():
+    results = [
+        {"family": "week", "segment": "s", "gold": {"week": 1}, "passed": True, "answer": "week 1", "reading": "week 1"},
+        {"family": "week", "segment": "s", "gold": {"break": "x"}, "passed": False, "answer": "week 2", "reading": "week 2"},
+        {"family": "week", "segment": "s", "gold": {"break": "x"}, "passed": False, "answer": "no idea", "reading": None},
+        {"family": "next_start", "segment": "s", "gold": {"date": "2027-02-01"}, "passed": True, "answer": "1 Feb"},
+    ]
+    rwa = bh.summarise(results)["right_wrong_abstained"]
+    assert rwa["week (teaching days)"] == {"right": 1, "wrong": 0, "abstained": 0}
+    assert rwa["week (breaks)"] == {"right": 0, "wrong": 1, "abstained": 1}
+    assert rwa["next_start"] == {"right": 1, "wrong": 0, "abstained": 0}
+    assert rwa["total"] == {"right": 2, "wrong": 1, "abstained": 1, "crag": 0.25}
+
+
+def test_the_calendar_sanity_set_uses_other_wordings_than_the_suite():
+    import calendar_sanity
+
+    suite_questions = {c["question"].lower() for c in CASES}
+    assert len({c["id"] for c in calendar_sanity.CASES}) == len(calendar_sanity.CASES) >= 10
+    assert not suite_questions & {c["question"].lower() for c in calendar_sanity.CASES}
